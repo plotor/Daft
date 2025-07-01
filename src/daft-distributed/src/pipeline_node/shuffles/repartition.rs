@@ -85,11 +85,17 @@ impl RepartitionNode {
             self.context.query_idx,
             task_id_counter,
         );
+        // 物化 Task 的执行结果，得到 [num_partitions][N] 的二维数组
         let transposed_outputs =
             transpose_materialized_outputs_from_stream(materialized_stream, self.num_partitions)
                 .await?;
+        println!(
+            ">> transformed outputs size: {:?}",
+            transposed_outputs.len()
+        );
 
         // Make each partition group (partitions equal by (hash % num_partitions)) input to a in-memory scan
+        // 选择一份构造一个 InMemoryScan 生成一个 SwordfishTask
         for partition_group in transposed_outputs {
             let (in_memory_source_plan, psets) = MaterializedOutput::into_in_memory_scan_with_psets(
                 partition_group,

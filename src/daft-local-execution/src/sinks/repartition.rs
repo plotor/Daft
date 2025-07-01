@@ -64,6 +64,11 @@ impl BlockingSink for RepartitionSink {
         let repartition_spec = self.repartition_spec.clone();
         let num_partitions = self.num_partitions;
         let schema = self.schema.clone();
+        println!(
+            ">> RepartitionSink, num_partitions: {}, type: {}",
+            num_partitions,
+            repartition_spec.var_name()
+        );
         spawner
             .spawn(
                 async move {
@@ -77,7 +82,14 @@ impl BlockingSink for RepartitionSink {
                             input.partition_by_hash(&bound_exprs, num_partitions)?
                         }
                         RepartitionSpec::Random(_) => {
-                            input.partition_by_random(num_partitions, 0)?
+                            let mps = input.partition_by_random(num_partitions, 0)?;
+                            println!(
+                                ">> partition_by_random: {}, input: {}, output: {}",
+                                num_partitions,
+                                input.record_batches().len(),
+                                mps.len()
+                            );
+                            mps
                         }
                         RepartitionSpec::Range(config) => input.partition_by_range(
                             &config.by,

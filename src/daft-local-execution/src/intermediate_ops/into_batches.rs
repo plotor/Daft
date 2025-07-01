@@ -39,6 +39,7 @@ impl IntermediateOperator for IntoBatchesOperator {
             .spawn(
                 async move {
                     let out = match input.concat_or_get()? {
+                        // 合并成一个大的 RecordBatch，方便后续的分区合并
                         Some(record_batch) => Arc::new(MicroPartition::new_loaded(
                             input.schema(),
                             Arc::new(vec![record_batch]),
@@ -65,10 +66,12 @@ impl IntermediateOperator for IntoBatchesOperator {
 
     fn morsel_size_requirement(&self) -> Option<MorselSizeRequirement> {
         match self.strict {
+            // 严格要求每个分区的输出大小为 batch_size
             true => Some(MorselSizeRequirement::Strict(
                 NonZeroUsize::new(self.batch_size)
                     .expect("batch_size must be non-zero for strict requirement"),
             )),
+            // 输出大小控制在 batch_size * 0.8 到 batch_size 之间
             false => {
                 let lower_bound =
                     (self.batch_size as f64 * Self::BATCH_SIZE_LOWER_BOUND_THRESHOLD) as usize;

@@ -85,6 +85,7 @@ impl RowBasedBuffer {
                         self.curr_len = 0;
                         Ok(Some(part))
                     } else {
+                        // 合并所有数据为一个 MicroPartition
                         let chunk = MicroPartition::concat(std::mem::take(&mut self.buffer))?;
                         self.curr_len = 0;
                         Ok(Some(chunk.into()))

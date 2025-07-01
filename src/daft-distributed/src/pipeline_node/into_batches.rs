@@ -9,6 +9,7 @@ use daft_local_plan::{LocalNodeContext, LocalPhysicalPlan};
 use daft_logical_plan::{partitioning::UnknownClusteringConfig, stats::StatsState};
 use daft_schema::schema::SchemaRef;
 use futures::StreamExt;
+use itertools::Itertools;
 
 use super::{PipelineNodeImpl, TaskBuilderStream};
 use crate::{
@@ -125,14 +126,23 @@ impl IntoBatchesNode {
         result_tx: Sender<SwordfishTaskBuilder>,
         scheduler_handle: SchedulerHandle<SwordfishTask>,
     ) -> DaftResult<()> {
+        // 提交第一阶段的任务
         let mut materialized_stream =
             input_node.materialize(scheduler_handle, self.context.query_idx, task_id_counter);
 
         let mut current_group: Vec<MaterializedOutput> = Vec::new();
         let mut current_group_size = 0;
 
+        // 阻塞等待至少一个上游 Task 执行完成
         while let Some(mat) = materialized_stream.next().await {
-            for mat in mat?.split_into_materialized_outputs() {
+            // 将一个包含多个分区的 MaterializedOutput 拆分为多个单分区的输出，便于独立处理
+            let output = mat?;
+            println!(
+                ">> Recv upstream task: into_batches(batch_size=[{}], strict=false), current_group_size: {}",
+                output.partition.iter().map(|p| p.num_rows()).join(", "),
+                current_group_size
+            );
+            for mat in output.split_into_materialized_outputs() {
                 let rows = mat.num_rows();
                 if rows == 0 {
                     continue;
@@ -140,8 +150,13 @@ impl IntoBatchesNode {
 
                 current_group.push(mat);
                 current_group_size += rows;
+                // 当累计的行数超过 batch_size * 0.8 时，提交一个下游 Task
                 if current_group_size >= (self.batch_size as f64 * BATCH_SIZE_THRESHOLD) as usize {
                     let group_size = std::mem::take(&mut current_group_size);
+                    println!(
+                        ">> Emit downstream task: into_batches(batch_size={}, strict=true)",
+                        group_size
+                    );
 
                     let materialized_outputs = std::mem::take(&mut current_group);
                     let (in_memory_scan, psets) =
@@ -153,7 +168,7 @@ impl IntoBatchesNode {
                     let plan = LocalPhysicalPlan::into_batches(
                         in_memory_scan,
                         group_size,
-                        true, // Strict batch sizes for the downstream tasks, as they have been coalesced.
+                        true, // 严格模式，Strict batch sizes for the downstream tasks, as they have been coalesced.
                         StatsState::NotMaterialized,
                         LocalNodeContext::new(Some(self.node_id() as usize))
                             .with_phase(REBATCH_PHASE),
@@ -220,7 +235,7 @@ impl PipelineNodeImpl for IntoBatchesNode {
             LocalPhysicalPlan::into_batches(
                 input,
                 batch_size,
-                false, // No need strict batch sizes for the child tasks, as we coalesce them later on.
+                false, // 非严格模式，No need strict batch sizes for the child tasks, as we coalesce them later on.
                 StatsState::NotMaterialized,
                 LocalNodeContext::new(Some(node_id as usize)).with_phase(INITIAL_BATCH_PHASE),
             )

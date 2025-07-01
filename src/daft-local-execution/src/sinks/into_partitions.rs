@@ -51,7 +51,7 @@ impl IntoPartitionsSink {
 }
 
 impl BlockingSink for IntoPartitionsSink {
-    type State = IntoPartitionsState;
+    type State = IntoPartitionsState; // 本质上就是一个 Vec
 
     #[instrument(skip_all, name = "IntoPartitionsSink::sink")]
     fn sink(
@@ -82,10 +82,11 @@ impl BlockingSink for IntoPartitionsSink {
                         .flat_map(|mut state| state.finalize())
                         .collect();
 
-                    // Concatenate all data
+                    // Concatenate all data, 将所有收集的 MicroPartition 构建成一个大的 MicroPartition
                     let concatenated = MicroPartition::concat(all_parts)?;
 
                     let total_rows = concatenated.len();
+                    // 计算每个分区需要多少行数据
                     let rows_per_partition = total_rows.div_ceil(num_partitions);
 
                     let mut outputs = Vec::new();
@@ -94,7 +95,7 @@ impl BlockingSink for IntoPartitionsSink {
                         let end_idx = std::cmp::min(start_idx + rows_per_partition, total_rows);
 
                         if start_idx < total_rows {
-                            let sliced_table = concatenated.slice(start_idx, end_idx)?;
+                            let sliced_table = concatenated.slice(start_idx, end_idx)?; // MicroPartition
                             outputs.push(Arc::new(sliced_table));
                         } else {
                             // Empty partition
@@ -103,6 +104,8 @@ impl BlockingSink for IntoPartitionsSink {
                             outputs.push(Arc::new(mp));
                         }
                     }
+                    println!(">> IntoPartitionsSink: total_rows: {}, num_partitions: {}, rows_per_partition: {}, outputs: {}",
+                             total_rows, num_partitions, rows_per_partition, outputs.len());
                     Ok(BlockingSinkFinalizeOutput::Finished(outputs))
                 },
                 Span::current(),

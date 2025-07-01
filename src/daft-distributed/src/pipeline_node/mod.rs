@@ -76,7 +76,7 @@ pub(crate) type NodeName = Arc<str>;
 /// to schedule follow-up pipeline nodes on the same worker.
 #[derive(Clone, Debug)]
 pub(crate) struct MaterializedOutput {
-    partition: Vec<PartitionRef>,
+    partition: Vec<PartitionRef>, // 包含多个分区的引用
     worker_id: WorkerId,
     ip_address: String,
     task_id: TaskID,
@@ -119,6 +119,7 @@ impl MaterializedOutput {
         (self.partition, self.worker_id, self.ip_address)
     }
 
+    /// 将每个 PartitionRef 映射成为一个 MaterializedOutput 对象
     pub fn split_into_materialized_outputs(&self) -> Vec<Self> {
         self.partition
             .iter()

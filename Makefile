@@ -60,7 +60,7 @@ build-release: check-toolchain .venv  ## Compile and install a faster Daft binar
 
 .PHONY: build-whl
 build-whl: check-toolchain .venv  ## Compile Daft for development, only generate whl file without installation
-	@unset CONDA_PREFIX && PYO3_PYTHON=$(VENV_BIN)/python $(VENV_BIN)/maturin build --release
+	@unset CONDA_PREFIX && PYO3_PYTHON=$(VENV_BIN)/python $(VENV_BIN)/maturin build
 
 .PHONY: test
 test: .venv build  ## Run tests

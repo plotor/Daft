@@ -246,7 +246,7 @@ impl<Op: IntermediateOperator + 'static> IntermediateNode<Op> {
             tokio::select! {
                 biased;
 
-                // Branch 1: Join completed task (only if tasks exist)
+                // Branch 1: Join completed task (only if tasks exist) 处理已完成的任务
                 Some(join_result) = ctx.task_set.join_next(), if !ctx.task_set.is_empty() => {
                     let control = Self::handle_task_completion(join_result??, ctx).await?;
                     if !control.should_continue() {
@@ -258,10 +258,11 @@ impl<Op: IntermediateOperator + 'static> IntermediateNode<Op> {
                     let (lower, upper) = new_requirements.values();
                     buffer.update_bounds(lower, upper);
 
+                    // 尝试启动新的批处理任务
                     Self::spawn_ready_batches(&mut buffer, ctx)?;
                 }
 
-                // Branch 2: Receive input (only if states available and receiver open)
+                // Branch 2: Receive input (only if states available and receiver open) 接收输入数据
                 morsel = receiver.recv(), if !ctx.state_pool.is_empty() && !input_closed => {
                     match morsel {
                         Some(morsel) => {

@@ -88,6 +88,10 @@ impl IntoPartitionsNode {
         // Remainder: 10 % 3 = 1 (one task gets an extra input)
         let num_partitions_with_extra_input = builders.len() % self.num_partitions;
 
+        // 记录每个输出分区需要合并的 Task 数量，比如上游有 10 个 ScanTask，目标分区时 3，则会将这个 10 个 Task
+        // 分组为 [4, 3, 3]，然后逐一等待这几个分组任务的执行，比如前 4 个任务执行完了则将其物化结果构造一个
+        // InMemoryScan + IntoPartitions(1) 以实现分区合并
+        // 所以这里看做是流式执行的，因为无需等待所有的分组任务执行完成再执行下游 Task，而是每当完成一个分组任务就可以提交一个下游 Task
         let mut tasks_per_partition = Vec::new();
 
         let mut builder_iter = builders.into_iter();
@@ -122,6 +126,7 @@ impl IntoPartitionsNode {
             });
         }
 
+        // 逐一物化并处理各个分区任务的输出
         while let Some(result) = output_futures.join_next().await {
             // Collect all the outputs from this task and coalesce them into a single task.
             let materialized_outputs = result??;
@@ -175,6 +180,7 @@ impl IntoPartitionsNode {
             if input_partition_idx < num_partitions_with_extra_output {
                 num_outputs += 1;
             }
+            // 构造一个 IntoPartitions(x) 任务，将各个 Task 的输出拆分成多个分区输出
             let into_partitions_builder = builder.map_plan(self.as_ref(), |plan| {
                 LocalPhysicalPlan::into_partitions(
                     plan,
@@ -230,7 +236,12 @@ impl IntoPartitionsNode {
         let input_builders: Vec<SwordfishTaskBuilder> = input_stream.collect().await;
         let num_input_tasks = input_builders.len();
 
+        println!(
+            ">> input task num: {}, num_partitions: {}",
+            num_input_tasks, self.num_partitions
+        );
         match num_input_tasks.cmp(&self.num_partitions) {
+            // 输入分区数 == 输出分区数，取决于是否需要进行 Task 合并
             std::cmp::Ordering::Equal => {
                 if self
                     .config
@@ -255,6 +266,7 @@ impl IntoPartitionsNode {
                     }
                 }
             }
+            // 输入分区数 > 输出分区数：合并
             std::cmp::Ordering::Greater => {
                 // Too many tasks - coalesce
                 self.coalesce_tasks(
@@ -265,6 +277,7 @@ impl IntoPartitionsNode {
                 )
                 .await?;
             }
+            // 输入分区数 < 输出分区数：拆分
             std::cmp::Ordering::Less => {
                 // Too few tasks - split
                 self.split_tasks(

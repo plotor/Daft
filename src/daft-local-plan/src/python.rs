@@ -56,6 +56,10 @@ impl PyLocalPhysicalPlan {
             dict.into(),
         ))
     }
+
+    fn __str__(&self) -> PyResult<String> {
+        Ok(self.plan.single_line_display())
+    }
 }
 
 impl_bincode_py_state_serialization!(PyLocalPhysicalPlan);

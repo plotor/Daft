@@ -119,13 +119,14 @@ impl PreShuffleMergeNode {
         // Bucket materialized outputs by worker ID
         let mut worker_buckets: HashMap<WorkerId, Vec<MaterializedOutput>> = HashMap::new();
 
+        // 逐一物化上游 Task 输出
         while let Some(output) = materialized_stream.try_next().await? {
-            // Push the output to the appropriate bucket
+            // Push the output to the appropriate bucket，将上游输出结果按照所属 WorkerID 进行分桶
             let worker_id = output.worker_id().clone();
             let bucket = worker_buckets.entry(worker_id.clone()).or_default();
             bucket.push(output);
 
-            // Check if this bucket has reached the threshold
+            // Check if this bucket has reached the threshold，如果一个 Worker 输出的数据总和已经超过阈值，
             if bucket
                 .iter()
                 .map(|output| output.size_bytes())
@@ -134,6 +135,7 @@ impl PreShuffleMergeNode {
             {
                 // Drain the bucket and create a task to merge the outputs
                 if let Some(materialized_outputs) = worker_buckets.remove(&worker_id) {
+                    // 构造一个 InMemoryScan 节点，以及这个节点需要加载的分区数据 psets
                     let (in_memory_scan, psets) =
                         MaterializedOutput::into_in_memory_scan_with_psets(
                             materialized_outputs,

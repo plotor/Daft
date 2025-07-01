@@ -74,3 +74,5 @@ CLAUDE.local.md
 .claude/**/*.md
 .claude/worktrees/
 .beads
+
+tests/**/test_debug.py
