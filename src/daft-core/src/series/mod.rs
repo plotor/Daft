@@ -27,6 +27,7 @@ use crate::{
     with_match_daft_types,
 };
 
+/// 负责存储一列数据
 #[derive(Clone, Debug, Display)]
 #[display("{}\n", self.to_comfy_table())]
 pub struct Series {

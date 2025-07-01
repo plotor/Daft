@@ -1,4 +1,5 @@
 use std::{
+    fmt::{Display, Formatter},
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -98,6 +99,12 @@ where
     }
 }
 
+impl Display for DynBatchingStrategy {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Dyn",)
+    }
+}
+
 impl BatchingStrategy for DynBatchingStrategy {
     type State = DynBatchingState;
 
@@ -157,6 +164,12 @@ mod tests {
             _duration: std::time::Duration,
         ) {
             *self += batch_size;
+        }
+    }
+
+    impl Display for MockStrategy {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            write!(f, "Test")
         }
     }
 

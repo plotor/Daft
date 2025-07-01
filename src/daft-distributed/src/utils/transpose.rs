@@ -1,6 +1,7 @@
 use common_error::DaftResult;
 use futures::{Stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
+use tokio::time::Instant;
 
 use crate::pipeline_node::MaterializedOutput;
 
@@ -8,11 +9,21 @@ pub(crate) async fn transpose_materialized_outputs_from_stream(
     materialized_stream: impl Stream<Item = DaftResult<MaterializedOutput>> + Send + Unpin,
     num_partitions: usize,
 ) -> DaftResult<Vec<Vec<MaterializedOutput>>> {
+    // 阻塞等待获取所有的 Partition 结果，这里每个元素的长度都是 num_partitions
+    println!(">> Before materialized stream: {}", num_partitions);
+    let timer = Instant::now();
     let materialized_partitions = materialized_stream
         .map(|mat| mat.map(|mat| mat.split_into_materialized_outputs()))
         .try_collect::<Vec<_>>()
         .await?;
+    println!(
+        ">> After materialized stream: num_partitions={}, input_results: {}, elapsed={}ms",
+        num_partitions,
+        materialized_partitions.len(),
+        timer.elapsed().as_millis()
+    );
 
+    // 本质上是二维数组的转置，将 [N][num_partitions] 转置为 [num_partitions][N]
     Ok(transpose_materialized_outputs(
         materialized_partitions,
         num_partitions,

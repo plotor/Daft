@@ -57,8 +57,10 @@ impl MicroPartition {
     }
 
     pub fn partition_by_random(&self, num_partitions: usize, seed: u64) -> DaftResult<Vec<Self>> {
+        // 获取当前 MicroPartition 中的所有的 RecordBatch
         let tables = self.record_batches();
 
+        // 没有数据，则输出 num_partitions 个空的 MicroPartition
         if tables.is_empty() {
             return Ok(
                 std::iter::repeat_with(|| Self::empty(Some(self.schema.clone())))
@@ -67,6 +69,7 @@ impl MicroPartition {
             );
         }
 
+        // 对每个 RecordBatch 进行随机分区，并将结果
         let part_tables = tables
             .iter()
             .enumerate()
