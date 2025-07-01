@@ -8,12 +8,27 @@ pub(crate) async fn transpose_materialized_outputs_from_stream(
     materialized_stream: impl Stream<Item = DaftResult<MaterializedOutput>> + Send + Unpin,
     num_partitions: usize,
 ) -> DaftResult<Vec<Vec<MaterializedOutput>>> {
+    // 阻塞等待获取所有的结果
     let materialized_partitions = materialized_stream
         .map(|mat| mat.map(|mat| mat.split_into_materialized_outputs()))
         .try_collect::<Vec<_>>()
         .await?;
 
-    transpose_materialized_outputs(materialized_partitions, num_partitions)
+    let part_count_before = materialized_partitions.iter().map(Vec::len).sum::<usize>();
+    let repartition_results =
+        transpose_materialized_outputs(materialized_partitions, num_partitions);
+    if let Ok(res) = &repartition_results {
+        let parts = res.iter().map(|l| l.len()).collect::<Vec<_>>();
+        println!("----------------------------------------------");
+        println!(
+            "After materialize repartition data, repartition from {} to {}, detail: [{}]",
+            part_count_before,
+            parts.len(),
+            parts.into_iter().join(", ")
+        );
+        println!("----------------------------------------------");
+    }
+    repartition_results
 }
 
 pub(crate) fn transpose_materialized_outputs_from_vec(

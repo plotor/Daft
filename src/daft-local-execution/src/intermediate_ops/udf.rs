@@ -483,7 +483,7 @@ impl IntermediateOperator for UdfOperator {
     #[instrument(skip_all, name = "UdfOperator::execute")]
     fn execute(
         &self,
-        input: Arc<MicroPartition>,
+        input: Arc<MicroPartition>, // 当前的输入
         mut state: Self::State,
         task_spawner: &ExecutionTaskSpawner,
     ) -> IntermediateOpExecuteResult<Self> {

@@ -48,8 +48,8 @@ impl BroadcastJoinNode {
         null_equals_nulls: Option<Vec<bool>>,
         join_type: JoinType,
         is_swapped: bool,
-        broadcaster: DistributedPipelineNode,
-        receiver: DistributedPipelineNode,
+        broadcaster: DistributedPipelineNode, // 广播表
+        receiver: DistributedPipelineNode,    // 接收表
         output_schema: SchemaRef,
     ) -> Self {
         let context = PipelineNodeContext::new(
@@ -94,15 +94,29 @@ impl BroadcastJoinNode {
         result_tx: Sender<SubmittableTask<SwordfishTask>>,
         scheduler_handle: SchedulerHandle<SwordfishTask>,
     ) -> DaftResult<()> {
+        // 提交执行所有广播表对应的任务，并阻塞等待结果
         let materialized_broadcast_data = broadcaster_input
             .materialize(scheduler_handle.clone())
             .try_collect::<Vec<_>>()
             .await?;
+
+        println!("----------------------------------------------");
+        println!(
+            "After materialize broadcast data, total rows: {}",
+            materialized_broadcast_data
+                .iter()
+                .map(|o| o.num_rows())
+                .sum::<DaftResult<usize>>()?
+        );
+        println!("----------------------------------------------");
+
+        // 针对广播表的数据构造一个 InMemoryScan 算子
         let materialized_broadcast_data_plan = make_in_memory_scan_from_materialized_outputs(
             &materialized_broadcast_data,
             self.broadcaster_schema.clone(),
             self.node_id(),
         )?;
+
         let broadcast_psets = HashMap::from([(
             self.node_id().to_string(),
             materialized_broadcast_data
@@ -110,6 +124,7 @@ impl BroadcastJoinNode {
                 .flat_map(|output| output.into_inner().0)
                 .collect::<Vec<_>>(),
         )]);
+
         while let Some(task) = receiver_input.next().await {
             let input_plan = task.task().plan();
             let (left_plan, right_plan) = if self.is_swapped {

@@ -32,6 +32,7 @@ impl PushDownProjection {
         let upstream_plan = &projection.input;
         let upstream_schema = upstream_plan.schema();
 
+        // 1. 检查是不是无效的投影，比如投影和上游数据返回的列一致
         // First, drop this projection if it is a no-op
         // (selecting exactly all parent columns in the same order and nothing else).
         let projection_is_noop = {
@@ -57,6 +58,7 @@ impl PushDownProjection {
             return Ok(new_plan);
         }
 
+        // 2. 尝试合并投影操作
         // Next, check if the upstream is another projection we can merge with.
         // This is possible iff the upstream projection's computation-required columns
         // are each only used once in this downstream projection.
@@ -137,6 +139,7 @@ impl PushDownProjection {
         }
 
         match upstream_plan.as_ref() {
+            // Project 下推
             LogicalPlan::Source(source) => {
                 // Prune unnecessary columns directly from the source.
                 let required_columns = plan.required_columns().single();
@@ -175,6 +178,7 @@ impl PushDownProjection {
                     }
                 }
             }
+            // 投影列消除
             LogicalPlan::Project(upstream_projection) => {
                 // Prune columns from the child projection that are not used in this projection.
                 let required_columns = plan.required_columns().single();
@@ -202,6 +206,7 @@ impl PushDownProjection {
                     Ok(Transformed::no(plan))
                 }
             }
+            // 投影列消除
             LogicalPlan::Aggregate(aggregate) => {
                 // Prune unnecessary columns from the child aggregate.
                 let required_columns = plan.required_columns().single();
