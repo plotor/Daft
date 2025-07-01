@@ -336,6 +336,19 @@ fn physical_plan_to_pipeline(
             let source = EmptyScanSource::new(schema.clone());
             SourceNode::new(source.arced(), stats_state.clone(), ctx).boxed()
         }
+        LocalPhysicalPlan::InMemoryScan(InMemoryScan { info, stats_state }) => {
+            let cache_key: Arc<str> = info.cache_key.clone().into();
+
+            let materialized_pset = psets.get_partition_set(&cache_key);
+            let in_memory_source = InMemorySource::new(
+                materialized_pset,
+                info.source_schema.clone(),
+                info.size_bytes,
+            )
+            .arced();
+            SourceNode::new(in_memory_source, stats_state.clone(), ctx).boxed()
+        }
+        // 创建数据源节点
         LocalPhysicalPlan::PhysicalScan(PhysicalScan {
             scan_tasks,
             pushdowns,
@@ -346,6 +359,10 @@ fn physical_plan_to_pipeline(
                 .iter()
                 .map(|task| task.clone().as_any_arc().downcast().unwrap())
                 .collect::<Vec<ScanTaskRef>>();
+            println!(
+                ">> Create ScanTaskSource and SourceNode, task num: {}",
+                scan_tasks.len()
+            );
 
             let scan_task_source =
                 ScanTaskSource::new(scan_tasks, pushdowns.clone(), schema.clone(), cfg);
@@ -471,18 +488,7 @@ fn physical_plan_to_pipeline(
             )
             .boxed()
         }
-        LocalPhysicalPlan::InMemoryScan(InMemoryScan { info, stats_state }) => {
-            let cache_key: Arc<str> = info.cache_key.clone().into();
-
-            let materialized_pset = psets.get_partition_set(&cache_key);
-            let in_memory_source = InMemorySource::new(
-                materialized_pset,
-                info.source_schema.clone(),
-                info.size_bytes,
-            )
-            .arced();
-            SourceNode::new(in_memory_source, stats_state.clone(), ctx).boxed()
-        }
+        // 转换成 ProjectOperator
         LocalPhysicalPlan::Project(Project {
             input,
             projection,

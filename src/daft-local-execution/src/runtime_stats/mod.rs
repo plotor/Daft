@@ -41,6 +41,7 @@ use crate::{
     },
 };
 
+// 是否启用 Progress Bar，默认开启
 fn should_enable_progress_bar() -> bool {
     let progress_var_name = "DAFT_PROGRESS_BAR";
     if let Ok(val) = std::env::var(progress_var_name) {
@@ -90,6 +91,7 @@ impl RuntimeStatsManager {
     pub fn new(handle: &Handle, pipeline: &Box<dyn PipelineNode>) -> Self {
         // Construct mapping between node id and their node info and runtime stats
         let mut node_stats_map = HashMap::new();
+        // 建立节点 ID 到节点信息的映射关系
         let _ = pipeline.apply(|node| {
             let node_info = node.node_info();
             let runtime_stats = node.runtime_stats();
@@ -111,14 +113,17 @@ impl RuntimeStatsManager {
 
         let mut subscribers: Vec<Box<dyn RuntimeStatsSubscriber>> = Vec::new();
 
+        // 是否启用 Progress Bar，默认开启
         if should_enable_progress_bar() {
             subscribers.push(make_progress_bar_manager(&node_stats));
         }
 
+        // 是否启动 opentelemetry，默认不开启
         if should_enable_opentelemetry() {
             subscribers.push(Box::new(OpenTelemetrySubscriber::new()));
         }
 
+        // 是否启动 Dashboard，默认不开启
         if DashboardSubscriber::is_enabled() {
             subscribers.push(Box::new(DashboardSubscriber::new()));
         }
@@ -158,6 +163,7 @@ impl RuntimeStatsManager {
             loop {
                 tokio::select! {
                     biased;
+                    // 处理 finish 信号，直接退出事件循环
                     _ = &mut finish_rx => {
                         if !active_nodes.is_empty() {
                             log::debug!(
@@ -169,13 +175,17 @@ impl RuntimeStatsManager {
                     }
 
                     Some((node_id, is_initialize)) = node_rx.recv() => {
+                        // 有节点加入
                         if is_initialize && active_nodes.insert(node_id) {
                             for subscriber in &subscribers {
                                 if let Err(e) = subscriber.initialize_node(&node_stats[node_id].0) {
                                     log::error!("Failed to initialize node: {}", e);
                                 }
                             }
-                        } else if !is_initialize && active_nodes.remove(&node_id) {
+                        }
+                        // 有节点退出
+                        else if !is_initialize && active_nodes.remove(&node_id) {
+                            // 获取节点对应的节点信息和运行时统计信息
                             let (node_info, runtime_stats) = &node_stats[node_id];
                             let event = runtime_stats.flush();
                             let event = [(node_info.as_ref(), event)];
@@ -190,21 +200,28 @@ impl RuntimeStatsManager {
                         }
                     }
 
+                    // 定时采集统计信息，默认间隔 200ms
                     _ = interval.tick() => {
                         if active_nodes.is_empty() {
                             continue;
                         }
 
+                        // 遍历所有存活的节点，获取快照信息
                         for node_id in &active_nodes {
+                            // 获取节点信息和运行时统计信息
                             let (node_info, runtime_stats) = &node_stats[*node_id];
+                            // 获取快照信息
                             let event = runtime_stats.snapshot();
                             snapshot_container.push((node_info.as_ref(), event));
                         }
+
+                        // 向在册的 Subscriber 批量发送事件
                         for subscriber in &subscribers {
                             if let Err(e) = subscriber.handle_event(snapshot_container.as_slice()) {
                                 log::error!("Failed to handle event: {}", e);
                             }
                         }
+
                         snapshot_container.clear();
                     }
                 }
