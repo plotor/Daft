@@ -1995,6 +1995,7 @@ class DistributedPhysicalPlanRunner:
 class LocalPhysicalPlan:
     @staticmethod
     def from_logical_plan_builder(builder: LogicalPlanBuilder) -> LocalPhysicalPlan: ...
+    def __str__(self) -> str: ...
 
 class RayPartitionRef:
     object_ref: ray.ObjectRef

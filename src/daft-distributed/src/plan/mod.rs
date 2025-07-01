@@ -33,16 +33,17 @@ pub(crate) type QueryIdx = u16;
 pub(crate) struct DistributedPhysicalPlan {
     query_idx: QueryIdx,
     query_id: QueryID,
-    logical_plan: Arc<LogicalPlan>,
+    logical_plan: Arc<LogicalPlan>, // Optimized LogicalPlan
     config: Arc<DaftExecutionConfig>,
 }
 
 impl DistributedPhysicalPlan {
     pub fn from_logical_plan_builder(
-        builder: &LogicalPlanBuilder,
+        builder: &LogicalPlanBuilder, // Optimized LogicalPlan
         query_id: QueryID,
         config: Arc<DaftExecutionConfig>,
     ) -> DaftResult<Self> {
+        // Optimized LogicalPlan
         let logical_plan = builder.build();
 
         Ok(Self {
@@ -61,6 +62,7 @@ impl DistributedPhysicalPlan {
         self.query_id.clone()
     }
 
+    // 返回 Optimized LogicalPlan
     pub fn logical_plan(&self) -> &daft_logical_plan::LogicalPlanRef {
         &self.logical_plan
     }

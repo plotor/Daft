@@ -18,6 +18,7 @@ use crate::scheduling::{
 const REFRESH_INTERVAL_SECS: Duration = Duration::from_secs(5);
 
 struct RayWorkerManagerState {
+    // 记录当前 Ray 集群所有 Worker 节点 ID 以及对应的资源情况
     ray_workers: HashMap<WorkerId, RaySwordfishWorker>,
     last_refresh: Option<Instant>,
     max_resources_requested: ResourceRequest,
@@ -25,6 +26,7 @@ struct RayWorkerManagerState {
 
 impl RayWorkerManagerState {
     fn refresh_workers(&mut self) -> DaftResult<()> {
+        // refresh 间隔必须大于 5s
         let should_refresh = match self.last_refresh {
             None => true,
             Some(last_time) => last_time.elapsed() > REFRESH_INTERVAL_SECS,
@@ -34,6 +36,7 @@ impl RayWorkerManagerState {
             return Ok(());
         }
 
+        // 获取 Ray 集群上所有的 Worker 节点，并在新加入的节点上启动一个 RaySwordfishActor
         let ray_workers = Python::attach(|py| {
             let flotilla_module = py.import(pyo3::intern!(py, "daft.runners.flotilla"))?;
 
@@ -56,6 +59,7 @@ impl RayWorkerManagerState {
         for worker in ray_workers {
             self.ray_workers.insert(worker.id().clone(), worker);
         }
+
         self.last_refresh = Some(Instant::now());
         DaftResult::Ok(())
     }
@@ -93,6 +97,7 @@ impl WorkerManager for RayWorkerManager {
             Vec::with_capacity(tasks_per_worker.values().map(|v| v.len()).sum());
 
         Python::attach(|py| {
+            // 遍历发往每个 worker 的 Task 列表
             for (worker_id, tasks) in tasks_per_worker {
                 let handles = state
                     .ray_workers
@@ -110,6 +115,7 @@ impl WorkerManager for RayWorkerManager {
         DaftResult::Ok(task_result_handles)
     }
 
+    /// 获取 Ray 集群上所有的 Worker 节点（包含资源信息），并在新加入的节点上启动一个 RaySwordfishActor
     fn worker_snapshots(&self) -> DaftResult<Vec<WorkerSnapshot>> {
         let mut state = self
             .state
@@ -117,6 +123,7 @@ impl WorkerManager for RayWorkerManager {
             .expect("Failed to lock RayWorkerManagerState");
 
         // Refresh workers if needed (internally rate-limited)
+        // 获取 Ray 集群上所有的 Worker 节点，并在新加入的节点上启动一个 RaySwordfishActor
         state.refresh_workers()?;
 
         Ok(state

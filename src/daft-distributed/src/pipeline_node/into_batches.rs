@@ -80,9 +80,14 @@ impl IntoBatchesNode {
         let mut current_group: Vec<MaterializedOutput> = Vec::new();
         let mut current_group_size = 0;
 
+        println!("-----------------------LOOP <into batches> START -----------------------");
         while let Some(mat) = materialized_stream.next().await {
             for mat in mat?.split_into_materialized_outputs() {
                 let rows = mat.num_rows()?;
+                println!(
+                    ">> IntoBatches: load {} rows of data from materialized output.",
+                    rows
+                );
                 if rows == 0 {
                     continue;
                 }
@@ -112,6 +117,13 @@ impl IntoBatchesNode {
                         },
                         None,
                     )?;
+
+                    println!(
+                        ">> IntoBatches: create new task {} with {} rows",
+                        &task.task().name(),
+                        group_size
+                    );
+
                     if result_tx.send(task).await.is_err() {
                         break;
                     }
@@ -140,8 +152,17 @@ impl IntoBatchesNode {
                 },
                 None,
             )?;
+
+            println!(
+                ">> IntoBatches: create new task {} with xx rows",
+                &task.task().name()
+            );
+
             let _ = result_tx.send(task).await;
         }
+
+        println!("-----------------------LOOP <into batches> STOP -----------------------");
+
         Ok(())
     }
 }

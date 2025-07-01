@@ -68,7 +68,7 @@ impl IntoPartitionsNode {
 
     async fn coalesce_tasks(
         self: Arc<Self>,
-        tasks: Vec<SubmittableTask<SwordfishTask>>,
+        tasks: Vec<SubmittableTask<SwordfishTask>>, // 上游 Task 集合
         scheduler_handle: &SchedulerHandle<SwordfishTask>,
         task_id_counter: &TaskIDCounter,
         result_tx: Sender<SubmittableTask<SwordfishTask>>,
@@ -122,6 +122,7 @@ impl IntoPartitionsNode {
         while let Some(result) = output_futures.join_next().await {
             // Collect all the outputs from this task and coalesce them into a single task.
             let materialized_outputs = result??;
+            let mo_count = &materialized_outputs.len();
             let self_arc = self.clone();
             let node_id = self_arc.node_id();
             let task = make_new_task_from_materialized_outputs(
@@ -142,6 +143,13 @@ impl IntoPartitionsNode {
                 },
                 None,
             )?;
+
+            println!(
+                ">> IntoPartitions: create new task {} with {} materialized outputs",
+                &task.task().name(),
+                mo_count
+            );
+
             if result_tx.send(task).await.is_err() {
                 break;
             }
@@ -218,6 +226,12 @@ impl IntoPartitionsNode {
                         &(self_arc as Arc<dyn PipelineNodeImpl>),
                         None,
                     )?;
+
+                    println!(
+                        ">> IntoPartitions: create new task {} with 1 materialized output",
+                        &task.task().name()
+                    );
+
                     if result_tx.send(task).await.is_err() {
                         break;
                     }
@@ -248,11 +262,19 @@ impl IntoPartitionsNode {
             }
             std::cmp::Ordering::Greater => {
                 // Too many tasks - coalesce
+                println!(
+                    ">> into_partitions with coalesce from {} to {}",
+                    num_input_tasks, &self.num_partitions
+                );
                 self.coalesce_tasks(input_tasks, &scheduler_handle, &task_id_counter, result_tx)
                     .await?;
             }
             std::cmp::Ordering::Less => {
                 // Too few tasks - split
+                println!(
+                    ">> into_partitions with split from {} to {}",
+                    num_input_tasks, &self.num_partitions
+                );
                 self.split_tasks(input_tasks, &scheduler_handle, &task_id_counter, result_tx)
                     .await?;
             }
