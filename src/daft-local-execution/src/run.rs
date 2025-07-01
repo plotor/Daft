@@ -132,6 +132,7 @@ impl PyNativeExecutor {
             .collect();
         let psets = InMemoryPartitionSetCache::new(&native_psets);
         let out = py.allow_threads(|| {
+            // 执行物理执行计划
             self.executor
                 .run(
                     &local_physical_plan.plan,
@@ -286,6 +287,7 @@ impl NativeExecutor {
         start_chrome_trace();
         let cancel = self.cancel.clone();
         let ctx = RuntimeContext::new_with_context(additional_context.unwrap_or_default());
+        // 构建执行 pipeline
         let pipeline = physical_plan_to_pipeline(local_physical_plan, psets, &cfg, &ctx)?;
         let total_nodes = pipeline.node_id();
         let pb_manager =
@@ -298,7 +300,9 @@ impl NativeExecutor {
         let enable_explain_analyze = self.enable_explain_analyze;
         // todo: split this into a run and run_async method
         // the run_async should spawn a task instead of a thread like this
+        // 启动执行线程
         let handle = std::thread::spawn(move || {
+            // 获取 or 创建 tokio runtime
             let runtime = rt.unwrap_or_else(|| {
                 Arc::new(
                     tokio::runtime::Builder::new_current_thread()
@@ -307,6 +311,7 @@ impl NativeExecutor {
                         .expect("Failed to create tokio runtime"),
                 )
             });
+            // 基于 tokio runtime 执行 pipeline
             let execution_task = async {
                 let memory_manager = get_or_init_memory_manager();
                 let mut runtime_handle = ExecutionRuntimeContext::new(
@@ -315,14 +320,17 @@ impl NativeExecutor {
                     pb_manager,
                     stats_handler.clone(),
                 );
+                // 启动执行 pipeline
                 let receiver = pipeline.start(true, &mut runtime_handle)?;
 
+                // 消费 pipeline 执行结果
                 while let Some(val) = receiver.recv().await {
                     if tx.send(val).await.is_err() {
                         break;
                     }
                 }
 
+                // 等待任务执行完成
                 while let Some(result) = runtime_handle.join_next().await {
                     match result {
                         Ok(Err(e)) | Err(e) => {

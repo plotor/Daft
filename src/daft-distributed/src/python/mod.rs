@@ -150,6 +150,7 @@ impl PyDistributedPhysicalPlanRunner {
         let plan_result = self
             .runner
             .run_plan(&plan.plan, psets, statistics_manager)?;
+        // 将执行结果包装为 Python 异步迭代器
         let part_stream = PythonPartitionRefStream {
             inner: Arc::new(Mutex::new(plan_result.into_stream())),
         };

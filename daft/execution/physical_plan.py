@@ -62,7 +62,6 @@ if TYPE_CHECKING:
     from daft.io import DataSink
     from daft.logical.schema import Schema
 
-
 # A PhysicalPlan that is still being built - may yield both PartitionTaskBuilders and PartitionTasks.
 InProgressPhysicalPlan = Iterator[Union[None, PartitionTask[PartitionT], PartitionTaskBuilder[PartitionT]]]
 
@@ -81,7 +80,7 @@ stage_id_counter: Iterator[int] = _stage_id_counter()
 
 
 def partition_read(
-    materialized_results: Iterator[MaterializedResult[PartitionT]],
+        materialized_results: Iterator[MaterializedResult[PartitionT]],
 ) -> InProgressPhysicalPlan[PartitionT]:
     """Instantiate a (no-op) physical plan from existing partitions."""
     yield from (
@@ -91,14 +90,14 @@ def partition_read(
 
 
 def file_write(
-    child_plan: InProgressPhysicalPlan[PartitionT],
-    write_mode: WriteMode,
-    file_format: FileFormat,
-    schema: Schema,
-    root_dir: str | pathlib.Path,
-    compression: str | None,
-    partition_cols: ExpressionsProjection | None,
-    io_config: IOConfig | None,
+        child_plan: InProgressPhysicalPlan[PartitionT],
+        write_mode: WriteMode,
+        file_format: FileFormat,
+        schema: Schema,
+        root_dir: str | pathlib.Path,
+        compression: str | None,
+        partition_cols: ExpressionsProjection | None,
+        io_config: IOConfig | None,
 ) -> InProgressPhysicalPlan[PartitionT]:
     """Write the results of `child_plan` into files described by `write_info`."""
     if write_mode == WriteMode.Overwrite or write_mode == WriteMode.OverwritePartitions:
@@ -150,13 +149,13 @@ def file_write(
 
 
 def iceberg_write(
-    child_plan: InProgressPhysicalPlan[PartitionT],
-    base_path: str,
-    iceberg_schema: IcebergSchema,
-    iceberg_properties: IcebergTableProperties,
-    partition_spec_id: int,
-    partition_cols: ExpressionsProjection,
-    io_config: IOConfig | None,
+        child_plan: InProgressPhysicalPlan[PartitionT],
+        base_path: str,
+        iceberg_schema: IcebergSchema,
+        iceberg_properties: IcebergTableProperties,
+        partition_spec_id: int,
+        partition_cols: ExpressionsProjection,
+        io_config: IOConfig | None,
 ) -> InProgressPhysicalPlan[PartitionT]:
     """Write the results of `child_plan` into pyiceberg data files described by `write_info`."""
     yield from (
@@ -177,12 +176,12 @@ def iceberg_write(
 
 
 def deltalake_write(
-    child_plan: InProgressPhysicalPlan[PartitionT],
-    base_path: str,
-    large_dtypes: bool,
-    version: int,
-    partition_cols: ExpressionsProjection | None,
-    io_config: IOConfig | None,
+        child_plan: InProgressPhysicalPlan[PartitionT],
+        base_path: str,
+        large_dtypes: bool,
+        version: int,
+        partition_cols: ExpressionsProjection | None,
+        io_config: IOConfig | None,
 ) -> InProgressPhysicalPlan[PartitionT]:
     """Write the results of `child_plan` into pyiceberg data files described by `write_info`."""
     yield from (
@@ -202,11 +201,11 @@ def deltalake_write(
 
 
 def lance_write(
-    child_plan: InProgressPhysicalPlan[PartitionT],
-    base_path: str,
-    mode: str,
-    io_config: IOConfig | None,
-    kwargs: dict[str, Any] | None,
+        child_plan: InProgressPhysicalPlan[PartitionT],
+        base_path: str,
+        mode: str,
+        io_config: IOConfig | None,
+        kwargs: dict[str, Any] | None,
 ) -> InProgressPhysicalPlan[PartitionT]:
     """Write the results of `child_plan` into lance data files described by `write_info`."""
     yield from (
@@ -225,8 +224,8 @@ def lance_write(
 
 
 def data_sink_write(
-    child_plan: InProgressPhysicalPlan[PartitionT],
-    sink: DataSink[Any],
+        child_plan: InProgressPhysicalPlan[PartitionT],
+        sink: DataSink[Any],
 ) -> InProgressPhysicalPlan[PartitionT]:
     """Write the results of `child_plan` into a custom write sink described by `sink`."""
     yield from (
@@ -236,9 +235,9 @@ def data_sink_write(
 
 
 def pipeline_instruction(
-    child_plan: InProgressPhysicalPlan[PartitionT],
-    pipeable_instruction: Instruction,
-    resource_request: ResourceRequest,
+        child_plan: InProgressPhysicalPlan[PartitionT],
+        pipeable_instruction: Instruction,
+        resource_request: ResourceRequest,
 ) -> InProgressPhysicalPlan[PartitionT]:
     """Apply an instruction to the results of `child_plan`."""
     yield from (
@@ -251,12 +250,12 @@ class ActorPoolManager:
     @abstractmethod
     @contextlib.contextmanager
     def actor_pool_context(
-        self,
-        name: str,
-        actor_resource_request: ResourceRequest,
-        task_resource_request: ResourceRequest,
-        num_actors: int,
-        projection: ExpressionsProjection,
+            self,
+            name: str,
+            actor_resource_request: ResourceRequest,
+            task_resource_request: ResourceRequest,
+            num_actors: int,
+            projection: ExpressionsProjection,
     ) -> Iterator[str]:
         """Creates a pool of actors which can execute work, and yield a context in which the pool can be used.
 
@@ -274,11 +273,11 @@ class ActorPoolManager:
 
 
 def actor_pool_project(
-    child_plan: InProgressPhysicalPlan[PartitionT],
-    projection: ExpressionsProjection,
-    actor_pool_manager: ActorPoolManager,
-    resource_request: ResourceRequest,
-    num_actors: int,
+        child_plan: InProgressPhysicalPlan[PartitionT],
+        projection: ExpressionsProjection,
+        actor_pool_manager: ActorPoolManager,
+        resource_request: ResourceRequest,
+        num_actors: int,
 ) -> InProgressPhysicalPlan[PartitionT]:
     stage_id = next(stage_id_counter)
 
@@ -302,11 +301,11 @@ def actor_pool_project(
     )
 
     with actor_pool_manager.actor_pool_context(
-        actor_pool_name,
-        actor_resource_request,
-        task_resource_request,
-        num_actors,
-        projection,
+            actor_pool_name,
+            actor_resource_request,
+            task_resource_request,
+            num_actors,
+            projection,
     ) as actor_pool_id:
         child_plan_exhausted = False
 
@@ -362,7 +361,7 @@ def actor_pool_project(
 
 
 def monotonically_increasing_id(
-    child_plan: InProgressPhysicalPlan[PartitionT], column_name: str
+        child_plan: InProgressPhysicalPlan[PartitionT], column_name: str
 ) -> InProgressPhysicalPlan[PartitionT]:
     """Apply a monotonically_increasing_id instruction to the results of `child_plan`."""
     partition_counter = (
@@ -379,12 +378,12 @@ def monotonically_increasing_id(
 
 
 def hash_join(
-    left_plan: InProgressPhysicalPlan[PartitionT],
-    right_plan: InProgressPhysicalPlan[PartitionT],
-    left_on: ExpressionsProjection,
-    right_on: ExpressionsProjection,
-    null_equals_nulls: None | list[bool],
-    how: JoinType,
+        left_plan: InProgressPhysicalPlan[PartitionT],
+        right_plan: InProgressPhysicalPlan[PartitionT],
+        left_on: ExpressionsProjection,
+        right_on: ExpressionsProjection,
+        null_equals_nulls: None | list[bool],
+        how: JoinType,
 ) -> InProgressPhysicalPlan[PartitionT]:
     """Hash-based pairwise join the partitions from `left_child_plan` and `right_child_plan` together."""
     left_tasks: dict[int, SingleOutputPartitionTask[PartitionT]] = {}
@@ -402,7 +401,7 @@ def hash_join(
         yield step
 
     def create_join_step(
-        left_task: SingleOutputPartitionTask[PartitionT], right_task: SingleOutputPartitionTask[PartitionT]
+            left_task: SingleOutputPartitionTask[PartitionT], right_task: SingleOutputPartitionTask[PartitionT]
     ) -> SingleOutputPartitionTask[PartitionT]:
         """Helper function to create a join step for a pair of tasks."""
         left_size_bytes = left_task.partition_metadata().size_bytes
@@ -503,13 +502,13 @@ def hash_join(
 
 
 def _create_broadcast_join_step(
-    broadcaster_parts: deque[SingleOutputPartitionTask[PartitionT]],
-    receiver_part: SingleOutputPartitionTask[PartitionT],
-    left_on: ExpressionsProjection,
-    right_on: ExpressionsProjection,
-    null_equals_nulls: None | list[bool],
-    how: JoinType,
-    is_swapped: bool,
+        broadcaster_parts: deque[SingleOutputPartitionTask[PartitionT]],
+        receiver_part: SingleOutputPartitionTask[PartitionT],
+        left_on: ExpressionsProjection,
+        right_on: ExpressionsProjection,
+        null_equals_nulls: None | list[bool],
+        how: JoinType,
+        is_swapped: bool,
 ) -> PartitionTaskBuilder[PartitionT]:
     # Calculate memory request for task.
     broadcaster_size_bytes_ = 0
@@ -561,13 +560,13 @@ def _create_broadcast_join_step(
 
 
 def broadcast_join(
-    broadcaster_plan: InProgressPhysicalPlan[PartitionT],
-    receiver_plan: InProgressPhysicalPlan[PartitionT],
-    left_on: ExpressionsProjection,
-    right_on: ExpressionsProjection,
-    null_equals_nulls: None | list[bool],
-    how: JoinType,
-    is_swapped: bool,
+        broadcaster_plan: InProgressPhysicalPlan[PartitionT],
+        receiver_plan: InProgressPhysicalPlan[PartitionT],
+        left_on: ExpressionsProjection,
+        right_on: ExpressionsProjection,
+        null_equals_nulls: None | list[bool],
+        how: JoinType,
+        is_swapped: bool,
 ) -> InProgressPhysicalPlan[PartitionT]:
     """Broadcast join all partitions from the broadcaster child plan to each partition in the receiver child plan."""
     # Materialize the steps from the broadcaster and receiver sources to get partitions.
@@ -636,9 +635,9 @@ def broadcast_join(
 
 
 def cross_join(
-    left_plan: InProgressPhysicalPlan[PartitionT],
-    right_plan: InProgressPhysicalPlan[PartitionT],
-    outer_loop_side: JoinSide,
+        left_plan: InProgressPhysicalPlan[PartitionT],
+        right_plan: InProgressPhysicalPlan[PartitionT],
+        outer_loop_side: JoinSide,
 ) -> InProgressPhysicalPlan[PartitionT]:
     stage_id = next(stage_id_counter)
 
@@ -741,7 +740,7 @@ class MergeJoinTaskTracker(Generic[PartitionT]):
         # If no merge-join tasks have been added to the tracker yet for this partition, or we have an empty task in
         # staging, add the unfinalized merge-join task to staging.
         if not self._is_contained(part_id) or (
-            part_id in self._task_staging and self._task_staging[part_id].is_empty()
+                part_id in self._task_staging and self._task_staging[part_id].is_empty()
         ):
             self._task_staging[part_id] = task
         # Otherwise, we have at least 2 (probably) non-empty merge-join tasks, so we finalize the new task and add it
@@ -765,7 +764,7 @@ class MergeJoinTaskTracker(Generic[PartitionT]):
         self._finalized[part_id] = True
 
     def yield_ready(
-        self, part_id: str
+            self, part_id: str
     ) -> Iterator[SingleOutputPartitionTask[PartitionT] | PartitionTaskBuilder[PartitionT]]:
         """Returns an iterator of all tasks for this partition that are ready for execution.
 
@@ -823,14 +822,14 @@ class MergeJoinTaskTracker(Generic[PartitionT]):
 
 
 def _emit_merge_joins_on_window(
-    next_part: SingleOutputPartitionTask[PartitionT],
-    other_window: deque[SingleOutputPartitionTask[PartitionT]],
-    merge_join_task_tracker: MergeJoinTaskTracker[PartitionT],
-    flipped: bool,
-    next_is_larger: bool,
-    left_on: ExpressionsProjection,
-    right_on: ExpressionsProjection,
-    how: JoinType,
+        next_part: SingleOutputPartitionTask[PartitionT],
+        other_window: deque[SingleOutputPartitionTask[PartitionT]],
+        merge_join_task_tracker: MergeJoinTaskTracker[PartitionT],
+        flipped: bool,
+        next_is_larger: bool,
+        left_on: ExpressionsProjection,
+        right_on: ExpressionsProjection,
+        how: JoinType,
 ) -> Iterator[PartitionTaskBuilder[PartitionT] | PartitionTask[PartitionT]]:
     """Emits merge-join steps of next_part with each partition in other_window."""
     # Emit a merge-join step for all partitions in the other window that intersect with this new partition.
@@ -865,7 +864,7 @@ def _emit_merge_joins_on_window(
 
 
 def _memory_bytes_for_merge(
-    next_left: SingleOutputPartitionTask[PartitionT], next_right: SingleOutputPartitionTask[PartitionT]
+        next_left: SingleOutputPartitionTask[PartitionT], next_right: SingleOutputPartitionTask[PartitionT]
 ) -> int | None:
     # Calculate memory request for merge task.
     left_size_bytes = next_left.partition_metadata().size_bytes
@@ -884,12 +883,12 @@ def _memory_bytes_for_merge(
 
 
 def merge_join_sorted(
-    left_plan: InProgressPhysicalPlan[PartitionT],
-    right_plan: InProgressPhysicalPlan[PartitionT],
-    left_on: ExpressionsProjection,
-    right_on: ExpressionsProjection,
-    how: JoinType,
-    left_is_larger: bool,
+        left_plan: InProgressPhysicalPlan[PartitionT],
+        right_plan: InProgressPhysicalPlan[PartitionT],
+        left_on: ExpressionsProjection,
+        right_on: ExpressionsProjection,
+        how: JoinType,
+        left_is_larger: bool,
 ) -> InProgressPhysicalPlan[PartitionT]:
     """Merge the sorted partitions from `left_plan` and `right_plan` together.
 
@@ -961,11 +960,11 @@ def merge_join_sorted(
         # Remove prefix of smaller window that's under the high water mark set by this new larger-side partition,
         # since this prefix won't be able to match any future partitions on the smaller side of the join.
         while (
-            # We always leave at least one partition in the smaller-side window in case we need to yield an empty
-            # merge-join step for a future larger-side partition.
-            len(smaller_window) > (1 if larger_requests else 0)
-            and larger_window
-            and _is_strictly_bounded_above_by(smaller_window[0], larger_window[-1])
+                # We always leave at least one partition in the smaller-side window in case we need to yield an empty
+                # merge-join step for a future larger-side partition.
+                len(smaller_window) > (1 if larger_requests else 0)
+                and larger_window
+                and _is_strictly_bounded_above_by(smaller_window[0], larger_window[-1])
         ):
             smaller_window.popleft()
         # For each partition we remove from the larger window, we launch a coalesce task over all output partitions
@@ -973,23 +972,23 @@ def merge_join_sorted(
         # This loop also removes the prefix of larger window that's under the high water mark set by the smaller window,
         # since this prefix won't be able to match any future partitions on the smaller side.
         while (
-            # Must be a larger-side partition whose outputs need finalizing.
-            larger_window
-            and (
-                # Larger-side partition is bounded above by the most recent smaller-side partition, which means that no
-                # future smaller-side partition can intersect with this larger-side partition, allowing us to finalize
-                # the merge-join steps for the larger-side partition.
-                (smaller_window and _is_strictly_bounded_above_by(larger_window[0], smaller_window[-1]))
-                # No more smaller partitions left, so we should launch coalesce tasks for all remaining
-                # larger-side partitions.
-                or smaller_done
-            )
-            and (
-                # Only finalize merge-join tasks for larger-side partition if all outputs are done OR there's only a
-                # single finalized output (in which case we yield and unfinalized merge-join task to allow downstream
-                # fusion with it).
-                merge_join_task_tracker.all_tasks_done_for_partition(larger_window[0].id())
-            )
+                # Must be a larger-side partition whose outputs need finalizing.
+                larger_window
+                and (
+                        # Larger-side partition is bounded above by the most recent smaller-side partition, which means that no
+                        # future smaller-side partition can intersect with this larger-side partition, allowing us to finalize
+                        # the merge-join steps for the larger-side partition.
+                        (smaller_window and _is_strictly_bounded_above_by(larger_window[0], smaller_window[-1]))
+                        # No more smaller partitions left, so we should launch coalesce tasks for all remaining
+                        # larger-side partitions.
+                        or smaller_done
+                )
+                and (
+                        # Only finalize merge-join tasks for larger-side partition if all outputs are done OR there's only a
+                        # single finalized output (in which case we yield and unfinalized merge-join task to allow downstream
+                        # fusion with it).
+                        merge_join_task_tracker.all_tasks_done_for_partition(larger_window[0].id())
+                )
         ):
             done_larger_part = larger_window.popleft()
             part_id = done_larger_part.id()
@@ -1083,7 +1082,7 @@ def merge_join_sorted(
 
 
 def _is_strictly_bounded_above_by(
-    lower_part: SingleOutputPartitionTask[PartitionT], upper_part: SingleOutputPartitionTask[PartitionT]
+        lower_part: SingleOutputPartitionTask[PartitionT], upper_part: SingleOutputPartitionTask[PartitionT]
 ) -> bool:
     """Returns whether lower_part is strictly bounded above by upper part."""
     lower_boundaries = lower_part.partition_metadata().boundaries
@@ -1112,13 +1111,13 @@ def _memory_bytes_for_coalesce(input_parts: Iterable[SingleOutputPartitionTask[P
 
 
 def sort_merge_join_aligned_boundaries(
-    left_plan: InProgressPhysicalPlan[PartitionT],
-    right_plan: InProgressPhysicalPlan[PartitionT],
-    left_on: ExpressionsProjection,
-    right_on: ExpressionsProjection,
-    how: JoinType,
-    num_partitions: int,
-    left_is_larger: bool,
+        left_plan: InProgressPhysicalPlan[PartitionT],
+        right_plan: InProgressPhysicalPlan[PartitionT],
+        left_on: ExpressionsProjection,
+        right_on: ExpressionsProjection,
+        how: JoinType,
+        num_partitions: int,
+        left_is_larger: bool,
 ) -> InProgressPhysicalPlan[PartitionT]:
     """Sort-merge join the partitions from `left_plan` and `right_plan` together.
 
@@ -1315,7 +1314,7 @@ def _to_per_partition_bounds(boundaries: MicroPartition, num_partitions: int) ->
 
 
 def concat(
-    top_plan: InProgressPhysicalPlan[PartitionT], bottom_plan: InProgressPhysicalPlan[PartitionT]
+        top_plan: InProgressPhysicalPlan[PartitionT], bottom_plan: InProgressPhysicalPlan[PartitionT]
 ) -> InProgressPhysicalPlan[PartitionT]:
     """Vertical concat of the partitions in `top_plan` and `bottom_plan`."""
     # Yield steps in order from the top_plan to bottom_plan
@@ -1324,8 +1323,8 @@ def concat(
 
 
 def local_limit(
-    child_plan: InProgressPhysicalPlan[PartitionT],
-    limit: int,
+        child_plan: InProgressPhysicalPlan[PartitionT],
+        limit: int,
 ) -> Generator[None | PartitionTask[PartitionT] | PartitionTaskBuilder[PartitionT], int, None]:
     """Apply a limit instruction to each partition in the child_plan.
 
@@ -1347,10 +1346,10 @@ def local_limit(
 
 
 def global_limit(
-    child_plan: InProgressPhysicalPlan[PartitionT],
-    limit_rows: int,
-    eager: bool,
-    num_partitions: int,
+        child_plan: InProgressPhysicalPlan[PartitionT],
+        limit_rows: int,
+        eager: bool,
+        num_partitions: int,
 ) -> InProgressPhysicalPlan[PartitionT]:
     """Return the first n rows from the `child_plan`."""
     remaining_rows = limit_rows
@@ -1383,6 +1382,7 @@ def global_limit(
                 instruction=execution_step.GlobalLimit(limit),
             )
 
+            print(f"yield global_limit_step, limit: {limit}, remaining_rows: {remaining_rows}, task_rows: {done_task_metadata.num_rows}")
             yield global_limit_step
             remaining_partitions -= 1
             remaining_rows -= limit
@@ -1432,11 +1432,13 @@ def global_limit(
                 if len(materializations) == 0 and remaining_rows > 0 and partial_meta.num_rows is not None:
                     limit = min(remaining_rows, partial_meta.num_rows)
                     child_step = child_step.add_instruction(instruction=execution_step.LocalLimit(limit))
+                    print(f"Yield local limit: {limit}")
 
                     remaining_partitions -= 1
                     remaining_rows -= limit
                 else:
                     child_step = child_step.finalize_partition_task_single_output(stage_id=stage_id)
+                    print(f"materializations local limit: {remaining_rows}")
                     materializations.append(child_step)
             yield child_step
 
@@ -1478,9 +1480,9 @@ def flatten_plan(child_plan: InProgressPhysicalPlan[PartitionT]) -> InProgressPh
 
 
 def split(
-    child_plan: InProgressPhysicalPlan[PartitionT],
-    num_input_partitions: int,
-    num_output_partitions: int,
+        child_plan: InProgressPhysicalPlan[PartitionT],
+        num_input_partitions: int,
+        num_output_partitions: int,
 ) -> InProgressPhysicalPlan[PartitionT]:
     """Repartition the child_plan into more partitions by splitting partitions only. Preserves order.
 
@@ -1488,7 +1490,7 @@ def split(
     input partitions when performing the split.
     """
     assert (
-        num_output_partitions >= num_input_partitions
+            num_output_partitions >= num_input_partitions
     ), f"Cannot split from {num_input_partitions} to {num_output_partitions}."
 
     base_splits_per_partition, num_partitions_with_extra_output = divmod(num_output_partitions, num_input_partitions)
@@ -1509,16 +1511,16 @@ def split(
 
 
 def coalesce(
-    child_plan: InProgressPhysicalPlan[PartitionT],
-    from_num_partitions: int,
-    to_num_partitions: int,
+        child_plan: InProgressPhysicalPlan[PartitionT],
+        from_num_partitions: int,
+        to_num_partitions: int,
 ) -> InProgressPhysicalPlan[PartitionT]:
     """Coalesce the results of the child_plan into fewer partitions.
 
     The current implementation only does partition merging, no rebalancing.
     """
     assert (
-        to_num_partitions <= from_num_partitions
+            to_num_partitions <= from_num_partitions
     ), f"Cannot coalesce upwards from {from_num_partitions} to {to_num_partitions} partitions."
 
     boundaries = [math.ceil((from_num_partitions / to_num_partitions) * i) for i in range(to_num_partitions + 1)]
@@ -1547,7 +1549,7 @@ def coalesce(
                 # have that size.
                 mean_size = math.ceil(non_null_size_bytes / len(non_null_size_bytes_per_task))
                 size_bytes = non_null_size_bytes + mean_size * (
-                    len(size_bytes_per_task) - len(non_null_size_bytes_per_task)
+                        len(size_bytes_per_task) - len(non_null_size_bytes_per_task)
                 )
             else:
                 # If all null, set to null.
@@ -1582,8 +1584,8 @@ def coalesce(
 
 
 def reduce(
-    fanout_plan: InProgressPhysicalPlan[PartitionT],
-    reduce_instructions: ReduceInstruction | list[ReduceInstruction],
+        fanout_plan: InProgressPhysicalPlan[PartitionT],
+        reduce_instructions: ReduceInstruction | list[ReduceInstruction],
 ) -> InProgressPhysicalPlan[PartitionT]:
     """Reduce the result of fanout_plan.
 
@@ -1630,11 +1632,11 @@ def reduce(
 
 
 def sort(
-    child_plan: InProgressPhysicalPlan[PartitionT],
-    sort_by: ExpressionsProjection,
-    descending: list[bool],
-    nulls_first: list[bool],
-    num_partitions: int,
+        child_plan: InProgressPhysicalPlan[PartitionT],
+        sort_by: ExpressionsProjection,
+        descending: list[bool],
+        nulls_first: list[bool],
+        num_partitions: int,
 ) -> InProgressPhysicalPlan[PartitionT]:
     """Sort the result of `child_plan` according to `sort_info`."""
     # First, materialize the child plan.
@@ -1735,12 +1737,12 @@ def sort(
 
 
 def top_n(
-    child_plan: InProgressPhysicalPlan[PartitionT],
-    sort_by: ExpressionsProjection,
-    descending: list[bool],
-    nulls_first: list[bool],
-    limit: int,
-    num_partitions: int,
+        child_plan: InProgressPhysicalPlan[PartitionT],
+        sort_by: ExpressionsProjection,
+        descending: list[bool],
+        nulls_first: list[bool],
+        limit: int,
+        num_partitions: int,
 ) -> InProgressPhysicalPlan[PartitionT]:
     """Take the top N values from the result of `child_plan` according to `sort_info` and `limit`."""
     # TODO: The current distributed top_n implementation will perform a full sort
@@ -1759,7 +1761,7 @@ def top_n(
 
 
 def fanout_random(
-    child_plan: InProgressPhysicalPlan[PartitionT], num_partitions: int
+        child_plan: InProgressPhysicalPlan[PartitionT], num_partitions: int
 ) -> InProgressPhysicalPlan[PartitionT]:
     """Splits the results of `child_plan` randomly into a list of `node.num_partitions()` number of partitions."""
     seed = 0
@@ -1772,7 +1774,7 @@ def fanout_random(
 
 
 def _best_effort_next_step(
-    stage_id: int, child_plan: InProgressPhysicalPlan[PartitionT]
+        stage_id: int, child_plan: InProgressPhysicalPlan[PartitionT]
 ) -> tuple[PartitionTask[PartitionT] | None, bool]:
     """Performs a best-effort attempt at retrieving the next step from a child plan.
 
@@ -1804,9 +1806,9 @@ class Materialize(Generic[PartitionT]):
     """
 
     def __init__(
-        self,
-        child_plan: InProgressPhysicalPlan[PartitionT],
-        results_buffer_size: int | None,
+            self,
+            child_plan: InProgressPhysicalPlan[PartitionT],
+            results_buffer_size: int | None,
     ):
         self.child_plan: InProgressPhysicalPlan[PartitionT] = child_plan
         self.materializations: deque[SingleOutputPartitionTask[PartitionT]] = deque()
@@ -1904,7 +1906,7 @@ class Materialize(Generic[PartitionT]):
 
 
 def enumerate_open_executions(
-    schedule: InProgressPhysicalPlan[PartitionT],
+        schedule: InProgressPhysicalPlan[PartitionT],
 ) -> Iterator[tuple[int, None | PartitionTask[PartitionT] | PartitionTaskBuilder[PartitionT]]]:
     """Helper. Like enumerate() on an iterator, but only counts up if the result is an PartitionTaskBuilder.
 

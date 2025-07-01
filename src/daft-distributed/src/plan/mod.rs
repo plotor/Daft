@@ -38,6 +38,7 @@ impl DistributedPhysicalPlan {
         builder: &LogicalPlanBuilder,
         config: Arc<DaftExecutionConfig>,
     ) -> DaftResult<Self> {
+        // Optimized LogicalPlan
         let logical_plan = builder.build();
         let stage_plan = StagePlan::from_logical_plan(logical_plan.clone(), config)?;
 
