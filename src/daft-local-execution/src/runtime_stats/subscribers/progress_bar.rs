@@ -177,6 +177,7 @@ impl RuntimeStatsSubscriber for IndicatifProgressBarManager {
     }
 
     fn initialize_node(&self, node_info: &NodeInfo) -> DaftResult<()> {
+        // 获取 Node 对应的 ProgressBar 对象
         let pb = self.pbars.get(node_info.id).unwrap();
         pb.enable_steady_tick(TICK_INTERVAL);
         Ok(())

@@ -26,6 +26,7 @@ pub(crate) fn materialize_all_pipeline_outputs<T: Task>(
         scheduler_handle: SchedulerHandle<T>,
     ) -> DaftResult<()> {
         while let Some(pipeline_output) = input.next().await {
+            // 提交 SubmittedTask 给 Scheduler
             let finalized_task = pipeline_output.submit(&scheduler_handle)?;
             if tx.send(finalized_task).await.is_err() {
                 break;
@@ -76,11 +77,13 @@ pub(crate) fn materialize_all_pipeline_outputs<T: Task>(
     let (materialized_results_sender, materialized_results_receiver) = create_channel(1);
 
     let mut joinset = joinset.unwrap_or_else(JoinSet::new);
+    // 提交任务流中所有的 SubmittableTask 任务给 Scheduler
     joinset.spawn(task_finalizer(
         input,
         finalized_tasks_sender,
         scheduler_handle,
     ));
+    // 等待已提交的任务执行完成，并获取执行结果投递给 Channel
     joinset.spawn(task_materializer(
         finalized_tasks_receiver,
         materialized_results_sender,
