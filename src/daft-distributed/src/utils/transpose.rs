@@ -8,6 +8,7 @@ pub(crate) async fn transpose_materialized_outputs_from_stream(
     materialized_stream: impl Stream<Item = DaftResult<MaterializedOutput>> + Send + Unpin,
     num_partitions: usize,
 ) -> DaftResult<Vec<Vec<MaterializedOutput>>> {
+    // 阻塞等待获取所有的结果
     let materialized_partitions = materialized_stream
         .map(|mat| mat.map(|mat| mat.split_into_materialized_outputs()))
         .try_collect::<Vec<_>>()

@@ -321,6 +321,11 @@ impl UdfHandle {
         for batch in input_batches {
             // Prepare inputs
             let func_input = batch.get_columns(params.required_cols.as_slice());
+            println!(
+                ">> UDFProject#eval_input: batch: [{}], input: [{}]",
+                batch.schema.field_names().join(", "),
+                func_input.schema.field_names().join(", ")
+            );
 
             // Call the UDF
             let mut result_series = match self {
@@ -458,7 +463,7 @@ impl IntermediateOperator for UdfOperator {
     #[instrument(skip_all, name = "UdfOperator::execute")]
     fn execute(
         &self,
-        input: Arc<MicroPartition>,
+        input: Arc<MicroPartition>, // 当前的输入
         mut state: Self::State,
         task_spawner: &ExecutionTaskSpawner,
     ) -> IntermediateOpExecuteResult<Self> {

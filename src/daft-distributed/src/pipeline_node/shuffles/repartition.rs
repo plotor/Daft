@@ -77,7 +77,8 @@ impl RepartitionNode {
     ) -> DaftResult<()> {
         // Trigger materialization of the partitions
         // This will produce a stream of materialized outputs, each containing a vector of num_partitions partitions
-        let materialized_stream = local_repartition_node.materialize(scheduler_handle.clone());
+        let materialized_stream = local_repartition_node.materialize(scheduler_handle.clone()); // 这里并没有 await 等待
+
         let transposed_outputs =
             transpose_materialized_outputs_from_stream(materialized_stream, self.num_partitions)
                 .await?;

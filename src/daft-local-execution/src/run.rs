@@ -386,6 +386,7 @@ pub struct ExecutionEngineResult {
 }
 
 impl ExecutionEngineResult {
+    // 获取任务执行输出的 MicroPartition
     async fn next(&self) -> Option<Arc<MicroPartition>> {
         self.receiver.recv().await
     }

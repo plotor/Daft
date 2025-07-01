@@ -109,6 +109,7 @@ pub(crate) trait StreamingSink: Send + Sync {
 
 pub struct StreamingSinkNode<Op: StreamingSink> {
     op: Arc<Op>,
+    // 上游节点集合
     children: Vec<Box<dyn PipelineNode>>,
     runtime_stats: Arc<dyn RuntimeStats>,
     plan_stats: StatsState,
@@ -337,6 +338,7 @@ impl<Op: StreamingSink + 'static> PipelineNode for StreamingSinkNode<Op> {
         runtime_handle: &mut ExecutionRuntimeContext,
     ) -> crate::Result<Receiver<Arc<MicroPartition>>> {
         let mut child_result_receivers = Vec::with_capacity(self.children.len());
+        // 递归启动子节点
         for child in &self.children {
             let child_result_receiver = child.start(maintain_order, runtime_handle)?;
             child_result_receivers.push(InitializingCountingReceiver::new(
@@ -347,6 +349,7 @@ impl<Op: StreamingSink + 'static> PipelineNode for StreamingSinkNode<Op> {
             ));
         }
 
+        // 创建结果输出通道
         let (destination_sender, destination_receiver) = create_channel(0);
         let counting_sender = CountingSender::new(destination_sender, self.runtime_stats.clone());
 

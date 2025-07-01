@@ -13,8 +13,11 @@ use {
 ///
 /// Acts as a forward declaration for concrete partition implementations. _(Specifically the `MicroPartition` type defined in `daft-micropartition`)_
 pub trait Partition: std::fmt::Debug + Send + Sync {
+    // 当前 MicroPartition 对应的数据或 ObjectRef
     fn as_any(&self) -> &dyn Any;
+    // 当前 MicroPartition 承载数据的字节数
     fn size_bytes(&self) -> usize;
+    // 当前 MicroPartition 承载数据的行数
     fn num_rows(&self) -> usize;
 }
 
