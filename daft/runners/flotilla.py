@@ -34,7 +34,7 @@ try:
 except ImportError:
     raise
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("ray")
 
 
 @ray.remote
@@ -50,11 +50,11 @@ class RaySwordfishActor:
         self.native_executor = NativeExecutor()
 
     async def run_plan(
-        self,
-        plan: LocalPhysicalPlan,
-        config: PyDaftExecutionConfig,
-        psets: dict[str, list[ray.ObjectRef]],
-        context: dict[str, str] | None,
+            self,
+            plan: LocalPhysicalPlan,
+            config: PyDaftExecutionConfig,
+            psets: dict[str, list[ray.ObjectRef]],
+            context: dict[str, str] | None,
     ) -> AsyncGenerator[MicroPartition | list[PartitionMetadata], None]:
         """Run a plan on swordfish and yield partitions."""
         with profile():
@@ -62,6 +62,7 @@ class RaySwordfishActor:
             psets_mp = {k: [v._micropartition for v in v] for k, v in psets.items()}
 
             metas = []
+            # 采用 Swordfish Native 引擎执行 LocalPhysicalPlan
             async for partition in self.native_executor.run_async(plan, psets_mp, config, None, context):
                 if partition is None:
                     break
@@ -121,13 +122,14 @@ class RaySwordfishActorHandle:
     """
 
     def __init__(
-        self,
-        actor_handle: ray.actor.ActorHandle,
+            self,
+            actor_handle: ray.actor.ActorHandle,
     ):
         self.actor_handle = actor_handle
 
     def submit_task(self, task: RaySwordfishTask) -> RaySwordfishTaskHandle:
         psets = {k: [v.object_ref for v in v] for k, v in task.psets().items()}
+        # 调用 RaySwordfishActor#run_plan 方法
         result_handle = self.actor_handle.run_plan.options(name=task.name()).remote(
             task.plan(), task.config(), psets, task.context()
         )
@@ -142,14 +144,15 @@ class RaySwordfishActorHandle:
 
 def start_ray_workers(existing_worker_ids: list[str]) -> list[RaySwordfishWorker]:
     handles = []
+    # 遍历处理 Ray 的所有节点
     for node in ray.nodes():
         if (
-            "Resources" in node
-            and "CPU" in node["Resources"]
-            and "memory" in node["Resources"]
-            and node["Resources"]["CPU"] > 0
-            and node["Resources"]["memory"] > 0
-            and node["NodeID"] not in existing_worker_ids
+                "Resources" in node
+                and "CPU" in node["Resources"]
+                and "memory" in node["Resources"]
+                and node["Resources"]["CPU"] > 0
+                and node["Resources"]["memory"] > 0
+                and node["NodeID"] not in existing_worker_ids
         ):
             actor = RaySwordfishActor.options(  # type: ignore
                 scheduling_strategy=ray.util.scheduling_strategies.NodeAffinitySchedulingStrategy(
@@ -157,6 +160,7 @@ def start_ray_workers(existing_worker_ids: list[str]) -> list[RaySwordfishWorker
                     soft=False,
                 ),
             ).remote(num_worker_threads=int(node["Resources"]["CPU"]))
+            print(f"Start to run RaySwordfishActor on {node['NodeID']}, num_worker_threads: {int(node['Resources']['CPU'])}")
             actor_handle = RaySwordfishActorHandle(actor)
             handles.append(
                 RaySwordfishWorker(
@@ -184,9 +188,9 @@ class FlotillaRunnerCore:
         self.plan_runner = DistributedPhysicalPlanRunner(on_actor)
 
     def run_plan(
-        self,
-        plan: DistributedPhysicalPlan,
-        partition_sets: dict[str, PartitionSet[ray.ObjectRef]],
+            self,
+            plan: DistributedPhysicalPlan,
+            partition_sets: dict[str, PartitionSet[ray.ObjectRef]],
     ) -> None:
         psets = {
             k: [RayPartitionRef(v.partition(), v.metadata().num_rows, v.metadata().size_bytes or 0) for v in v.values()]
@@ -200,6 +204,8 @@ class FlotillaRunnerCore:
             PartitionMetadataAccessor,
             RayMaterializedResult,
         )
+
+        print(f">> FlotillaPlanRunner#get_next_partition: {plan_id}")
 
         if plan_id not in self.curr_result_gens:
             raise ValueError(f"Plan {plan_id} not found in FlotillaPlanRunner")
@@ -237,9 +243,9 @@ class LocalFlotillaRunner:
         return FlotillaRunnerCore(on_actor=False)
 
     def run_plan(
-        self,
-        plan: DistributedPhysicalPlan,
-        partition_sets: dict[str, PartitionSet[ray.ObjectRef]],
+            self,
+            plan: DistributedPhysicalPlan,
+            partition_sets: dict[str, PartitionSet[ray.ObjectRef]],
     ) -> None:
         self.core.run_plan(plan, partition_sets)
 
@@ -262,9 +268,9 @@ class RemoteFlotillaRunner:
         self.core = FlotillaRunnerCore(on_actor=True)
 
     def run_plan(
-        self,
-        plan: DistributedPhysicalPlan,
-        partition_sets: dict[str, PartitionSet[ray.ObjectRef]],
+            self,
+            plan: DistributedPhysicalPlan,
+            partition_sets: dict[str, PartitionSet[ray.ObjectRef]],
     ) -> None:
         self.core.run_plan(plan, partition_sets)
 

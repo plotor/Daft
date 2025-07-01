@@ -239,6 +239,7 @@ impl PipelineNode for StreamingSinkNode {
             self.runtime_stats.clone(),
         );
         let mut child_result_receivers = Vec::with_capacity(self.children.len());
+        // 递归启动子节点
         for child in &self.children {
             let child_result_receiver = child.start(maintain_order, runtime_handle)?;
             child_result_receivers.push(CountingReceiver::new(
@@ -249,6 +250,7 @@ impl PipelineNode for StreamingSinkNode {
             ));
         }
 
+        // 创建结果输出通道
         let (destination_sender, destination_receiver) = create_channel(0);
         let counting_sender = CountingSender::new(
             destination_sender,
@@ -261,6 +263,7 @@ impl PipelineNode for StreamingSinkNode {
         let runtime_stats = self.runtime_stats.clone();
         let num_workers = op.max_concurrency();
 
+        println!(">> StreamingSinkNode::start: {}, num_workers: {}", self.name(), num_workers);
         let dispatch_spawner = op.dispatch_spawner(runtime_handle, maintain_order);
         let spawned_dispatch_result = dispatch_spawner.spawn_dispatch(
             child_result_receivers,

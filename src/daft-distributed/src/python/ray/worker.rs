@@ -57,6 +57,7 @@ impl RaySwordfishWorker {
     ) -> DaftResult<Vec<RayTaskResultHandle>> {
         let mut task_handles = Vec::with_capacity(tasks.len());
         for task in tasks {
+            println!("Submitting task {:?}", task);
             let task_context = task.task_context();
             let task_details = TaskDetails::from(&task);
 

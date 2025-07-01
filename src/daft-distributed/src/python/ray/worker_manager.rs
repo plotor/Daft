@@ -15,6 +15,7 @@ use crate::scheduling::{
 
 // Wrapper around the RaySwordfishWorkerManager class in the distributed_swordfish module.
 pub(crate) struct RayWorkerManager {
+    // 维护 WorkId 到 RaySwordfishWorker 之间的映射关系
     ray_workers: Arc<Mutex<HashMap<WorkerId, RaySwordfishWorker>>>,
     task_locals: pyo3_async_runtimes::TaskLocals,
 }
@@ -53,7 +54,7 @@ impl RayWorkerManager {
             workers_guard.insert(worker.id().clone(), worker);
         }
 
-        DaftResult::Ok(())
+        Ok(())
     }
 }
 
@@ -81,7 +82,7 @@ impl WorkerManager for RayWorkerManager {
                     .submit_tasks(tasks, py, &self.task_locals)?;
                 task_result_handles.extend(handles);
             }
-            DaftResult::Ok(task_result_handles)
+            Ok(task_result_handles)
         })
     }
 

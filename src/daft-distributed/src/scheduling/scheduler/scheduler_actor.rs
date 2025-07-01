@@ -141,6 +141,7 @@ where
             || dispatcher.has_running_tasks()
         {
             // Update worker snapshots at the start of each loop iteration
+            // 获取 Ray 集群的 Worker 节点信息，并更新到 Scheduler
             let worker_snapshots = worker_manager.worker_snapshots()?;
             tracing::info!(target: SCHEDULER_LOG_TARGET, num_workers = worker_snapshots.len(), "Received worker snapshots");
             tracing::debug!(target: SCHEDULER_LOG_TARGET, worker_snapshots = %format!("{:#?}", worker_snapshots));

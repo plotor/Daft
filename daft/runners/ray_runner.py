@@ -1328,8 +1328,10 @@ class RayRunner(Runner[ray.ObjectRef]):
         daft_execution_config = get_context().daft_execution_config
 
         # Optimize the logical plan.
+        # 对 LogicalPlan 应用优化规则进行优化得到 Optimized LogicalPlan
         builder = builder.optimize()
 
+        # 启用 AQE
         if daft_execution_config.enable_aqe:
             adaptive_planner = builder.to_adaptive_physical_plan_scheduler(daft_execution_config)
             while not adaptive_planner.is_done():
@@ -1374,15 +1376,19 @@ class RayRunner(Runner[ray.ObjectRef]):
                 explain_analyze_dir = ray_tracing.get_daft_trace_location(ray_logs_location)
                 explain_analyze_dir.mkdir(exist_ok=True, parents=True)
                 adaptive_planner.explain_analyze(str(explain_analyze_dir))
+        # 启用 Flotilla 引擎
         elif daft_execution_config.use_experimental_distributed_engine:
             try:
+                # Optimized LogicalPlan -> PhysicalPlan
                 distributed_plan = DistributedPhysicalPlan.from_logical_plan_builder(
                     builder._builder, daft_execution_config
                 )
+            # 如果发生异常则继续走旧版 Ray Runner
             except Exception as e:
                 logger.error("Failed to build distributed plan, falling back to regular execution. Error: %s", str(e))
                 # Fallback to regular execution
                 yield from self._execute_plan(builder, daft_execution_config, results_buffer_size)
+            # 没有发生异常
             else:
                 if self.flotilla_plan_runner is None:
                     self.flotilla_plan_runner = FlotillaRunner(self.ray_client_mode)

@@ -97,8 +97,14 @@ impl Stage {
         let mut stage_context = StageExecutionContext::new(scheduler_handle);
         match &self.type_ {
             StageType::MapPipeline { plan } => {
+                // 这里通常是一个 Stage 算子树的根节点
                 let pipeline_node =
                     logical_plan_to_pipeline_node(stage_config, plan.clone(), Arc::new(psets))?;
+                println!(
+                    "distributed_pipeline is\n{}",
+                    viz_distributed_pipeline_ascii(pipeline_node.as_ref(), false)
+                );
+                // 基于深度优先遍历 pipeline 树（都是单个子节点），
                 let running_node = pipeline_node.start(&mut stage_context);
                 Ok(RunningStage::new(running_node, stage_context))
             }

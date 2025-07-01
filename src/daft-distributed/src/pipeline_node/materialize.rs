@@ -44,6 +44,7 @@ pub(crate) fn materialize_all_pipeline_outputs<T: Task>(
                 PipelineOutput::Materialized(partition) => FinalizedTask::Materialized(partition),
                 // If the pipeline output is a task, we need to submit it to the task dispatcher
                 PipelineOutput::Task(task) => {
+                    // 将 Task 发送给调度器
                     let submitted_task = task.submit(&scheduler_handle)?;
                     FinalizedTask::Running(submitted_task)
                 }

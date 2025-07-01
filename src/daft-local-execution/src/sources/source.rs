@@ -127,6 +127,7 @@ impl PipelineNode for SourceNode {
             progress_bar,
             runtime_handle.rt_stats_handler.clone(),
         );
+        println!(">> SourceNode::start: {}, source: {}", self.name(), source.name());
         runtime_handle.spawn_local(
             async move {
                 let mut has_data = false;
