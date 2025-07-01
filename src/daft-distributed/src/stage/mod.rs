@@ -97,8 +97,10 @@ impl Stage {
         let mut stage_context = StageExecutionContext::new(scheduler_handle);
         match &self.type_ {
             StageType::MapPipeline { plan } => {
+                // 基于 Visitor 将 StagePlan 转换成 Pipeline 管道
                 let pipeline_node =
                     logical_plan_to_pipeline_node(stage_config, plan.clone(), Arc::new(psets))?;
+                // 基于 Pipeline 管道生成 SubmittableTask 任务流 SubmittableTaskStream 实例
                 let running_node = pipeline_node.produce_tasks(&mut stage_context);
                 Ok(RunningStage::new(running_node, stage_context))
             }

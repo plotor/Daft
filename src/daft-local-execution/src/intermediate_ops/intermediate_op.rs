@@ -129,6 +129,7 @@ impl<Op: IntermediateOperator + 'static> IntermediateNode<Op> {
         let mut state = op.make_state()?;
         while let Some(morsel) = receiver.recv().await {
             loop {
+                // 按 morsel 粒度从 channel 中取数据进行处理
                 let result = op.execute(morsel.clone(), state, &task_spawner).await??;
                 state = result.0;
                 match result.1 {
@@ -159,8 +160,10 @@ impl<Op: IntermediateOperator + 'static> IntermediateNode<Op> {
         maintain_order: bool,
         memory_manager: Arc<MemoryManager>,
     ) -> OrderingAwareReceiver<Arc<MicroPartition>> {
+        // MPSC
         let (output_sender, output_receiver) =
             create_ordering_aware_receiver_channel(maintain_order, input_receivers.len());
+        // 提交 num_worker 个 Task，每个 worker 分配一个 input_receiver 和 output_sender
         for (input_receiver, output_sender) in input_receivers.into_iter().zip(output_sender) {
             runtime_handle.spawn_local(
                 Self::run_worker(
@@ -262,13 +265,18 @@ impl<Op: IntermediateOperator + 'static> PipelineNode for IntermediateNode<Op> {
                 runtime_handle.stats_manager(),
             ));
         }
+
         let op = self.intermediate_op.clone();
+        // 获取工作线程数
         let num_workers = op.max_concurrency().context(PipelineExecutionSnafu {
             node_name: self.name().to_string(),
         })?;
+
+        // 创建结果输出通道
         let (destination_sender, destination_receiver) = create_channel(0);
         let counting_sender = CountingSender::new(destination_sender, self.runtime_stats.clone());
 
+        // 创建 DispatchSpawner，依据是否需要保序，需要则使用 RoundRobinDispatcher，否则使用 UnorderedDispatcher
         let dispatch_spawner = self
             .intermediate_op
             .dispatch_spawner(self.morsel_size_requirement, maintain_order);
@@ -282,6 +290,7 @@ impl<Op: IntermediateOperator + 'static> PipelineNode for IntermediateNode<Op> {
             &self.name(),
         );
 
+        // 按照并发度启动多个 worker 线程，采用 MPSC 模式通信
         let mut output_receiver = self.spawn_workers(
             spawned_dispatch_result.worker_receivers,
             runtime_handle,
@@ -292,6 +301,7 @@ impl<Op: IntermediateOperator + 'static> PipelineNode for IntermediateNode<Op> {
         let node_id = self.node_id();
         runtime_handle.spawn_local(
             async move {
+                // 将处理结果数据继续往下传递
                 while let Some(morsel) = output_receiver.recv().await {
                     if counting_sender.send(morsel).await.is_err() {
                         return Ok(());

@@ -4,6 +4,7 @@ import contextlib
 import dataclasses
 import logging
 import os
+import sys
 import threading
 import time
 import uuid
@@ -12,6 +13,13 @@ from collections.abc import Generator, Iterable, Iterator
 from datetime import datetime
 from queue import Full, Queue
 from typing import TYPE_CHECKING, Any, Union, cast
+
+# FIXME by zhenchao remove it 2025-07-18 13:06:01
+venv_path = os.getenv("VIRTUAL_ENV", os.path.join(os.getcwd(), ".venv"))
+venv_site_packages = os.path.join(
+    venv_path, "lib", f"python{sys.version_info.major}.{sys.version_info.minor}", "site-packages"
+)
+sys.path.insert(0, venv_site_packages)
 
 # The ray runner is not a top-level module, so we don't need to lazily import pyarrow to minimize
 # import times. If this changes, we first need to make the daft.lazy_import.LazyImport class
@@ -1333,9 +1341,12 @@ class RayRunner(Runner[ray.ObjectRef]):
         daft_execution_config = get_context().daft_execution_config
 
         # Optimize the logical plan.
+        # 对 LogicalPlan 应用优化规则进行优化得到 Optimized LogicalPlan
         builder = builder.optimize()
 
+        # 使用 Legacy Ray Runner
         if daft_execution_config.use_legacy_ray_runner:
+            # 启用 AQE
             if daft_execution_config.enable_aqe:
                 adaptive_planner = builder.to_adaptive_physical_plan_scheduler(daft_execution_config)
                 while not adaptive_planner.is_done():
@@ -1386,6 +1397,7 @@ class RayRunner(Runner[ray.ObjectRef]):
                     plan_scheduler, daft_execution_config, results_buffer_size=results_buffer_size
                 )
                 yield from self._stream_plan(result_uuid)
+        # 使用 Flotilla
         else:
             distributed_plan = DistributedPhysicalPlan.from_logical_plan_builder(
                 builder._builder, daft_execution_config
