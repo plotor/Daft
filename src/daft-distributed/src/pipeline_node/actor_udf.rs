@@ -37,6 +37,11 @@ impl UDFActors {
         udf_properties: &UDFProperties,
         actor_ready_timeout: usize,
     ) -> DaftResult<Vec<PyObjectWrapper>> {
+        println!(
+            ">> initializing UDF actors for {}, properties {:?}",
+            udf_properties.name,
+            udf_properties.multiline_display(true)
+        );
         let py_exprs = projection
             .iter()
             .map(|e| PyExpr {
@@ -55,6 +60,7 @@ impl UDFActors {
             None => (0.0, 1.0, 0),
         };
 
+        // 调用 python start_udf_actors 启动 UDF Actor
         let actor_name = udf_properties.name.clone();
         let ray_options = udf_properties.ray_options.clone();
         let result =
@@ -165,7 +171,7 @@ impl ActorUDF {
 
     async fn execution_loop_fused(
         self: Arc<Self>,
-        mut input_task_stream: SubmittableTaskStream,
+        mut input_task_stream: SubmittableTaskStream, // 前置任务节点
         result_tx: Sender<SubmittableTask<SwordfishTask>>,
     ) -> DaftResult<()> {
         let mut udf_actors =
@@ -173,21 +179,31 @@ impl ActorUDF {
 
         let mut running_tasks = JoinSet::new();
         while let Some(task) = input_task_stream.next().await {
+            // 当前 UDF 对应的所有 UDFActor 实例的引用，若未初始化则先初始化
             let actors = udf_actors.get_actors(self.actor_ready_timeout).await?;
+            println!(
+                ">> Get {} udf actors for UDF: {}",
+                actors.len(),
+                self.udf_properties.name
+            );
 
+            // 将当前节点加入到上游 SubmittableTask 对应的执行计划中，返回更新后的 SubmittableTask
             let modified_task = self.append_actor_udf_to_task(task, actors);
             let (submittable_task, notify_token) = modified_task.add_notify_token();
             running_tasks.spawn(notify_token);
+            // 将 submittable_task 发送给 SubmittableTaskStream
             if result_tx.send(submittable_task).await.is_err() {
                 break;
             }
         }
+
         // Wait for all tasks to finish.
         while let Some(result) = running_tasks.join_next().await {
             if result?.is_err() {
                 break;
             }
         }
+
         // Only teardown actors after all tasks are finished.
         udf_actors.teardown();
         Ok(())
@@ -195,8 +211,8 @@ impl ActorUDF {
 
     fn append_actor_udf_to_task(
         self: &Arc<Self>,
-        submittable_task: SubmittableTask<SwordfishTask>,
-        actors: Vec<PyObjectWrapper>,
+        submittable_task: SubmittableTask<SwordfishTask>, // 上游 Task
+        actors: Vec<PyObjectWrapper>,                     // UDF 对应所有 UDFActor 实例的引用
     ) -> SubmittableTask<SwordfishTask> {
         let memory_request = self
             .udf_properties
@@ -274,6 +290,7 @@ impl PipelineNodeImpl for ActorUDF {
         self: Arc<Self>,
         plan_context: &mut PlanExecutionContext,
     ) -> SubmittableTaskStream {
+        // DFS 遍历
         let input_node = self.child.clone().produce_tasks(plan_context);
 
         let (result_tx, result_rx) = create_channel(1);

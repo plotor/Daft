@@ -8,6 +8,7 @@ use std::{
 
 use common_error::{DaftError, DaftResult};
 use futures::FutureExt;
+use itertools::Itertools;
 use tokio_util::sync::CancellationToken;
 use tracing::instrument;
 
@@ -70,21 +71,26 @@ where
     ) -> SchedulerHandle<W::Task> {
         tracing::info!(target: SCHEDULER_LOG_TARGET, "Spawning scheduler actor");
 
+        // 创建 PendingTask 任务通道，用于接收 PlanRunner 基于 Plan 构造的一系列 Task
         let (scheduler_sender, scheduler_receiver) = create_unbounded_channel();
 
         // Create dispatcher directly instead of spawning it as an actor
+        // 创建 Dispatcher，用于向 Ray 集群分发待执行的 Task
         let dispatcher = Dispatcher::new();
 
         // Spawn the scheduler actor to schedule tasks and dispatch them directly via the dispatcher
+        // 启动一个事件循环，用于调度执行接收到的 Task
         joinset.spawn(Self::run_scheduler_loop(
             scheduler.scheduler,
-            scheduler_receiver,
+            scheduler_receiver, // SwordfishTask 任务接收器
             dispatcher,
             scheduler.worker_manager,
             statistics_manager,
         ));
 
         tracing::info!(target: SCHEDULER_LOG_TARGET, "Spawned scheduler actor");
+
+        // 返回 Task 接收器，用于接收待执行的 Task
         SchedulerHandle::new(scheduler_sender)
     }
 
@@ -96,10 +102,12 @@ where
         input_exhausted: &mut bool,
     ) -> DaftResult<()> {
         // If there are any new tasks, enqueue them all
+        // 接收到新提交的 SwordfishTask
         if let Some(new_task) = maybe_new_task {
             let mut enqueueable_tasks = vec![new_task];
 
             // Drain all available tasks from the channel
+            // 尽可能获取已经提交的 SwordfishTask 集合
             while let Ok(task) = task_rx.try_recv() {
                 enqueueable_tasks.push(task);
             }
@@ -116,42 +124,48 @@ where
                 })?;
             }
 
+            // 将获取到的 SwordfishTask 集合记录到 Scheduler#pending_tasks 中
             scheduler.enqueue_tasks(enqueueable_tasks);
         } else if !*input_exhausted {
             tracing::info!(target: SCHEDULER_LOG_TARGET, "Task input stream exhausted");
             *input_exhausted = true;
         }
+
         Ok(())
     }
 
     #[instrument(name = "FlotillaScheduler", skip_all)]
     async fn run_scheduler_loop(
         mut scheduler: S,
-        mut task_rx: SchedulerReceiver<W::Task>,
+        mut task_rx: SchedulerReceiver<W::Task>, // Task 接收器
         mut dispatcher: Dispatcher<W>,
         worker_manager: Arc<dyn WorkerManager<Worker = W>>,
         statistics_manager: StatisticsManagerRef,
     ) -> DaftResult<()> {
         let mut input_exhausted = false;
-        let mut tick_interval = tokio::time::interval(SCHEDULER_TICK_INTERVAL);
+        let mut tick_interval = tokio::time::interval(SCHEDULER_TICK_INTERVAL); // 默认 1s
         // Keep running until the input is exhausted, i.e. no more new tasks, and there are no more pending tasks in the scheduler
-        while !input_exhausted
-            || scheduler.num_pending_tasks() > 0
+        while !input_exhausted // 标识是否已经没有新提交的 Task
+            || scheduler.num_pending_tasks() > 0 // 存在待调度的任务
             || dispatcher.has_running_tasks()
+        // 存在已分发还未执行完成的任务
         {
             // Update worker snapshots at the start of each loop iteration
+            // 获取 Ray 集群的 Worker 节点信息快照，并更新到 Scheduler
             let worker_snapshots = worker_manager.worker_snapshots()?;
             tracing::info!(target: SCHEDULER_LOG_TARGET,
                 num_workers = worker_snapshots.len(),
                 pending_tasks = scheduler.num_pending_tasks(),
                 "Received worker snapshots");
             tracing::debug!(target: SCHEDULER_LOG_TARGET, worker_snapshots = %format!("{:#?}", worker_snapshots));
-
             scheduler.update_worker_state(&worker_snapshots);
 
             // 1: Get all tasks that are ready to be scheduled
+            // 依据任务的 SchedulingStrategy 调度 Task，返回匹配到合适 Worker 节点的 Task，采用 ScheduledTask 封装
             let scheduled_tasks = scheduler.schedule_tasks();
+
             // 2: Dispatch tasks directly to the dispatcher
+            // 基于 Dispatcher 对 Task 列表按照 worker_id 分组，并向目标 Worker 按批次提交任务执行
             if !scheduled_tasks.is_empty() {
                 tracing::info!(target: SCHEDULER_LOG_TARGET, num_tasks = scheduled_tasks.len(), "Scheduling tasks for dispatch");
                 tracing::debug!(target: SCHEDULER_LOG_TARGET, scheduled_tasks = %format!("{:#?}", scheduled_tasks));
@@ -164,10 +178,22 @@ where
                     })?;
                 }
 
+                for (task_name, tasks) in &scheduled_tasks
+                    .iter()
+                    .chunk_by(|task| task.task.task_name())
+                {
+                    println!(
+                        ">> schedule and dispatch {} tasks: {:?}",
+                        tasks.count(),
+                        task_name
+                    );
+                }
+
                 dispatcher.dispatch_tasks(scheduled_tasks, &worker_manager)?;
             }
 
             // 3: Send autoscaling request if needed
+            // 检查是否需要执行 AutoScaling，需要的话则依据当前待调度的 Task 计算需要的资源数
             let autoscaling_request = scheduler.get_autoscaling_request();
             if let Some(request) = autoscaling_request {
                 tracing::info!(target: SCHEDULER_LOG_TARGET, autoscaling_request = %format!("{:#?}", request), "Sending autoscaling request");
@@ -176,16 +202,26 @@ where
 
             // 4: Concurrently wait for new tasks, task completions, or periodic tick
             tokio::select! {
+                // 尝试从 Channel 中尽可能获取所有已提交的 SwordfishTask，记录到调度器 Scheduler#pending_tasks 中
                 maybe_new_task = task_rx.recv(), if !input_exhausted => {
-                    Self::handle_new_tasks(maybe_new_task, &mut task_rx, &statistics_manager, &mut scheduler, &mut input_exhausted)?;
+                    Self::handle_new_tasks(
+                        maybe_new_task,
+                        &mut task_rx,
+                        &statistics_manager,
+                        &mut scheduler,
+                        &mut input_exhausted
+                    )?;
                 }
+
+                // 等待至少一个 Task 执行完成，对于执行成功的 Task 将其结果投递出去，对于失败的任务收集后重新入队列等待调度
                 failed_tasks = dispatcher.await_completed_tasks(&worker_manager, &statistics_manager), if dispatcher.has_running_tasks() => {
                     let failed_tasks = failed_tasks?;
-                    // Re-enqueue any failed tasks
+                    // Re-enqueue any failed tasks，将执行失败的 Task 重新入队列
                     if !failed_tasks.is_empty() {
                         scheduler.enqueue_tasks(failed_tasks);
                     }
                 }
+
                 _ = tick_interval.tick() => {
                     // Tick completed - worker snapshots will be updated at the top of the next loop iteration
                 }
@@ -220,6 +256,7 @@ fn spawn_default_scheduler_actor<W: Worker>(
 ) -> SchedulerHandle<W::Task> {
     tracing::info!(target: SCHEDULER_LOG_TARGET, "Spawning default scheduler actor");
 
+    // 创建并启动 Scheduler, 这里使用 DefaultScheduler 实例化
     let scheduler = SchedulerActor::default_scheduler(worker_manager);
     SchedulerActor::spawn_scheduler_actor(scheduler, joinset, statistics_manager)
 }
@@ -257,6 +294,7 @@ impl<T: Task> SchedulerHandle<T> {
         submittable_task: SubmittableTask<T>,
     ) -> (PendingTask<T>, SubmittedTask) {
         let task_id = submittable_task.task.task_id();
+        // 构造一个 Channel 用于接收 Task 执行完成的结果
         let (result_tx, result_rx) = create_oneshot_channel();
         let schedulable_task = PendingTask::new(
             submittable_task.task,
@@ -274,8 +312,10 @@ impl<T: Task> SchedulerHandle<T> {
     }
 
     fn submit_task(&self, submittable_task: SubmittableTask<T>) -> DaftResult<SubmittedTask> {
+        // 将 SubmittableTask 转换为 PendingTask 和 SubmittedTask
         let (schedulable_task, submitted_task) =
             Self::prepare_task_for_submission(submittable_task);
+        // 将 Task 投递给 Scheduler Channel
         self.scheduler_sender.send(schedulable_task).map_err(|_| {
             DaftError::InternalError("Failed to send task to scheduler".to_string())
         })?;
@@ -323,6 +363,7 @@ impl<T: Task> SubmittableTask<T> {
 #[derive(Debug)]
 pub(crate) struct SubmittedTask {
     _task_id: TaskID,
+    // 用于接收 Task 的执行结果
     result_rx: OneshotReceiver<DaftResult<Option<MaterializedOutput>>>,
     cancel_token: Option<CancellationToken>,
     notify_tokens: Vec<OneshotSender<()>>,
@@ -354,6 +395,7 @@ impl SubmittedTask {
 impl Future for SubmittedTask {
     type Output = DaftResult<Option<MaterializedOutput>>;
 
+    // 从 Channel 中获取 Task 的执行结果
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         match self.result_rx.poll_unpin(cx) {
             Poll::Ready(Ok(result)) => {

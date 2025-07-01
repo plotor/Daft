@@ -54,6 +54,7 @@ impl ScanTaskSource {
             .collect::<Vec<_>>();
 
         // Determine the number of parallel tasks to run based on available CPU cores and row limits
+        // 计算 Scan Task 并行度，如果包含 Limit PushDown，则基于统计的行数计算需要起多少个 Task，否则取最大上限 8
         let num_cpus = get_compute_pool_num_threads();
         let mut num_parallel_tasks = match pushdowns.limit {
             // If we have a row limit, we need to calculate how many parallel tasks we can run
@@ -128,6 +129,7 @@ impl ScanTaskSource {
 
             // Start initial batch of parallel tasks
             for _ in 0..num_parallel_tasks {
+                // 先提交 num_parallel_tasks 个 Scan Task，一个 Scan Task 对应一个 sender
                 if let Some((scan_task, sender)) = scan_task_and_sender_iter.next() {
                     task_set.spawn(forward_scan_task_stream(
                         scan_task,
@@ -141,6 +143,7 @@ impl ScanTaskSource {
             }
 
             // Process remaining tasks as previous ones complete
+            // 等待 1 个 Scan Task 执行完成再提交下 1 个
             while let Some(result) = task_set.join_next().await {
                 result??;
                 if let Some((scan_task, sender)) = scan_task_and_sender_iter.next() {
@@ -173,6 +176,7 @@ impl Source for ScanTaskSource {
         let delete_map = get_delete_map(&self.scan_tasks).await?.map(Arc::new);
 
         // Create channels for the scan tasks
+        // MPSC 场景，创建一个 channel，然后多个 scan task 都往这个 channel 里写数据
         let (senders, receivers) = match maintain_order {
             // If we need to maintain order, we need to create a channel for each scan task
             true => (0..self.scan_tasks.len())
@@ -181,6 +185,7 @@ impl Source for ScanTaskSource {
             // If we don't need to maintain order, we can use a single channel for all scan tasks
             false => {
                 let (tx, rx) = create_channel(0);
+                // 将 tx 复制 self.scan_tasks.len() 次
                 (vec![tx; self.scan_tasks.len()], vec![rx])
             }
         };
@@ -224,6 +229,7 @@ impl Source for ScanTaskSource {
 impl TreeDisplay for ScanTaskSource {
     fn display_as(&self, level: DisplayLevel) -> String {
         use std::fmt::Write;
+
         fn base_display(scan: &ScanTaskSource) -> String {
             let num_scan_tasks = scan.scan_tasks.len();
             let total_bytes: usize = scan
@@ -257,6 +263,7 @@ Num Parallel Scan Tasks = {num_parallel_tasks}
             }
             s
         }
+
         match level {
             DisplayLevel::Compact => self.get_name(),
             DisplayLevel::Default => {
@@ -287,7 +294,6 @@ Num Parallel Scan Tasks = {num_parallel_tasks}
                     }
                 }
                 writeln!(s, "]").unwrap();
-
                 s
             }
             DisplayLevel::Verbose => {
@@ -297,6 +303,7 @@ Num Parallel Scan Tasks = {num_parallel_tasks}
                 for st in &self.scan_tasks {
                     writeln!(s, "{}", st.as_ref().display_as(DisplayLevel::Verbose)).unwrap();
                 }
+
                 s
             }
         }

@@ -28,7 +28,9 @@ impl<T: Task> LinearScheduler<T> {
     fn try_schedule_spread_task(&self, task: &T) -> Option<WorkerId> {
         self.worker_snapshots
             .iter()
+            // 筛选出可用资源满足需求的节点
             .filter(|(_, worker)| worker.can_schedule_task(task))
+            // 选择空闲资源最多的节点
             .max_by_key(|(_, worker)| {
                 (worker.available_num_cpus() + worker.available_num_gpus()) as usize
             })
@@ -98,6 +100,7 @@ impl<T: Task> Scheduler<T> for LinearScheduler<T> {
 
     fn schedule_tasks(&mut self) -> Vec<ScheduledTask<T>> {
         // Check if any worker has active tasks
+        // 检查是否至少有一个 Worker 节点在执行任务
         let has_active_tasks = self
             .worker_snapshots
             .values()
@@ -113,6 +116,7 @@ impl<T: Task> Scheduler<T> for LinearScheduler<T> {
 
         // Process all tasks in the queue
         while let Some(task) = self.pending_tasks.pop() {
+            // 选择满足资源需求且空闲资源最多的节点
             if let Some(worker_id) = self.try_schedule_task(&task) {
                 self.worker_snapshots
                     .get_mut(&worker_id)

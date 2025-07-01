@@ -62,12 +62,14 @@ impl RaySwordfishWorker {
             let task_context = task.task_context();
             let task_details = TaskDetails::from(&task);
 
+            // 这里本质上远程调用 RaySwordfishActor#run_plan 方法提交执行 SwordfishTask
             let ray_swordfish_task = RaySwordfishTask::new(task);
             let py_task_handle = self.ray_worker_handle.call_method1(
                 py,
                 pyo3::intern!(py, "submit_task"),
                 (ray_swordfish_task,),
             )?;
+            // 构造一个调用 RaySwordfishTaskHandle#get_result 方法获取任务执行结果的协程
             let coroutine = py_task_handle.call_method0(py, pyo3::intern!(py, "get_result"))?;
 
             self.active_task_details

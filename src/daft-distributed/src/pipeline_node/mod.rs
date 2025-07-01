@@ -72,6 +72,7 @@ pub(crate) type NodeName = &'static str;
 /// to schedule follow-up pipeline nodes on the same worker.
 #[derive(Clone, Debug)]
 pub(crate) struct MaterializedOutput {
+    // 包含一个 SwordfishTask 执行输出的所有 MicroPartition 的 ObjectRef 和元信息
     partition: Vec<PartitionRef>,
     worker_id: WorkerId,
 }
@@ -227,7 +228,10 @@ impl DistributedPipelineNode {
         self.op.runtime_stats()
     }
     pub fn produce_tasks(self, plan_context: &mut PlanExecutionContext) -> SubmittableTaskStream {
-        self.op.produce_tasks(plan_context)
+        let op_name = self.op.name();
+        let submittable_task_stream = self.op.produce_tasks(plan_context);
+        println!(">> Produce tasks for operator {}", op_name);
+        submittable_task_stream
     }
     fn as_tree_display(&self) -> &dyn TreeDisplay {
         self
@@ -327,6 +331,7 @@ impl SubmittableTaskStream {
         self,
         scheduler_handle: SchedulerHandle<SwordfishTask>,
     ) -> impl Stream<Item = DaftResult<MaterializedOutput>> + Send + Unpin + 'static {
+        // 提交所有的 SwordfishTask 任务给 Scheduler，并等待任务执行完成返回结果
         materialize_all_pipeline_outputs(self.task_stream, scheduler_handle, None)
     }
 
@@ -334,6 +339,7 @@ impl SubmittableTaskStream {
     where
         F: Fn(LocalPhysicalPlanRef) -> LocalPhysicalPlanRef + Send + Sync + 'static,
     {
+        // 将新的计算节点加入到 SubmittableTask 的执行计划中，返回更新后的 SubmittableTask
         let task_stream = self
             .task_stream
             .map(move |task| append_plan_to_existing_task(task, &node, &plan_builder))
@@ -458,6 +464,7 @@ fn make_empty_scan_task(
     )
 }
 
+/// 将新的计算节点加入到 SubmittableTask 的执行计划中，返回更新后的 SubmittableTask
 fn append_plan_to_existing_task<F>(
     submittable_task: SubmittableTask<SwordfishTask>,
     node: &Arc<dyn PipelineNodeImpl>,
@@ -466,14 +473,18 @@ fn append_plan_to_existing_task<F>(
 where
     F: Fn(LocalPhysicalPlanRef) -> LocalPhysicalPlanRef + Send + Sync + 'static,
 {
+    // 获取 Task 原有的的执行计划
     let plan = submittable_task.task().plan();
+    // 将当前处理节点加入原有执行计划构造新的执行计划
     let new_plan = plan_builder(plan);
+    // 克隆任务配置参数
     let scheduling_strategy = submittable_task.task().strategy().clone();
     let psets = submittable_task.task().psets().clone();
     let config = submittable_task.task().config().clone();
     let mut task_context = submittable_task.task().task_context();
     task_context.add_node_id(node.node_id());
 
+    // 更新 SubmittableTask 中的 SwordfishTask
     submittable_task.with_new_task(SwordfishTask::new(
         task_context,
         new_plan,

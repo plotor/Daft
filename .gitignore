@@ -71,3 +71,5 @@ site
 AGENTS.md
 CLAUDE.local.md
 .claude/**/*.md
+
+tests/**/test_debug.py

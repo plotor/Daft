@@ -1,7 +1,7 @@
 mod dyn_strategy;
 mod latency_constrained_strategy;
 mod static_strategy;
-use std::{sync::Arc, time::Duration};
+use std::{fmt::Display, sync::Arc, time::Duration};
 
 pub use dyn_strategy::*;
 pub use latency_constrained_strategy::*;
@@ -26,7 +26,7 @@ pub trait BatchingStrategy: Send + Sync {
 }
 
 #[cfg(debug_assertions)]
-pub trait BatchingStrategy: Send + Sync + std::fmt::Debug {
+pub trait BatchingStrategy: Send + Sync + std::fmt::Debug + Display {
     type State: BatchingState + Send + Sync + Unpin;
     fn make_state(&self) -> Self::State;
     fn calculate_new_requirements(&self, state: &mut Self::State) -> MorselSizeRequirement;
@@ -106,6 +106,7 @@ where
 #[cfg(test)]
 mod tests {
     use std::{
+        fmt::Formatter,
         num::NonZeroUsize,
         sync::atomic::{AtomicUsize, Ordering},
         time::Duration,
@@ -174,6 +175,12 @@ mod tests {
 
         fn call_count(&self) -> usize {
             self.call_counter.load(Ordering::SeqCst)
+        }
+    }
+
+    impl Display for MockBatchingStrategy {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            write!(f, "Mock")
         }
     }
 

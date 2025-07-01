@@ -68,7 +68,7 @@ macro_rules! value_err {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct RecordBatch {
     pub schema: SchemaRef,
-    columns: Arc<Vec<Series>>,
+    columns: Arc<Vec<Series>>, // 多个行数相同的列
     num_rows: usize,
 }
 

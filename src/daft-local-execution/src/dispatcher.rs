@@ -49,8 +49,8 @@ impl<S: BatchingStrategy + 'static> RoundRobinDispatcher<S> {
     }
 
     async fn dispatch_inner(
-        worker_senders: Vec<Sender<Arc<MicroPartition>>>,
-        input_receivers: Vec<InitializingCountingReceiver>,
+        worker_senders: Vec<Sender<Arc<MicroPartition>>>, // 将数据按照 morsel 大小重新组织后投递到 Channel 中供当前节点处理
+        input_receivers: Vec<InitializingCountingReceiver>, // 接收上游数据
         batch_manager: Arc<BatchManager<S>>,
     ) -> DaftResult<()> {
         let mut next_worker_idx = 0;
@@ -92,10 +92,11 @@ impl<S: BatchingStrategy + 'static> RoundRobinDispatcher<S> {
 impl<S: BatchingStrategy + 'static> DispatchSpawner for RoundRobinDispatcher<S> {
     fn spawn_dispatch(
         &self,
-        input_receivers: Vec<InitializingCountingReceiver>,
-        num_workers: usize,
+        input_receivers: Vec<InitializingCountingReceiver>, // 接收上游数据
+        num_workers: usize,                                 // 并发度
         runtime_handle: &mut RuntimeHandle,
     ) -> SpawnedDispatchResult {
+        // 按照并发度创建对应数量的 Channel
         let (worker_senders, worker_receivers): (Vec<_>, Vec<_>) =
             (0..num_workers).map(|_| create_channel(0)).unzip();
         let batch_manager = self.batch_manager.clone();
@@ -143,8 +144,10 @@ impl UnorderedDispatcher {
         morsel_size_upper_bound: NonZeroUsize,
     ) -> DaftResult<()> {
         for receiver in input_receivers {
+            // 创建指定大小的缓冲区，可能包含多个 MP
             let mut buffer = RowBasedBuffer::new(morsel_size_lower_bound, morsel_size_upper_bound);
 
+            // 循环接收来自上游节点的处理后的数据
             while let Some(morsel) = receiver.recv().await {
                 buffer.push(morsel);
                 while let Some(batch) = buffer.next_batch_if_ready()? {
@@ -168,16 +171,19 @@ impl UnorderedDispatcher {
 impl DispatchSpawner for UnorderedDispatcher {
     fn spawn_dispatch(
         &self,
-        receiver: Vec<InitializingCountingReceiver>,
-        num_workers: usize,
+        receiver: Vec<InitializingCountingReceiver>, // 用于接收上游节点的数据
+        num_workers: usize,                          // 对应并发度
         runtime_handle: &mut RuntimeHandle,
     ) -> SpawnedDispatchResult {
+        // 创建 Channel，缓冲大小为并发度
         let (worker_sender, worker_receiver) = create_channel(num_workers);
+        // 将 worker_receiver 复制 num_workers 次
         let worker_receivers = vec![worker_receiver; num_workers];
         let morsel_size_lower_bound = self.morsel_size_lower_bound;
         let morsel_size_upper_bound = self.morsel_size_upper_bound;
 
         let dispatch_task = runtime_handle.spawn(async move {
+            // 消费上游节点数据，并按照 morsel_size 组织成新的 Partition 发送到 worker Channel 中
             Self::dispatch_inner(
                 worker_sender,
                 receiver,

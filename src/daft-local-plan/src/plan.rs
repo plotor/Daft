@@ -408,6 +408,7 @@ impl LocalPhysicalPlan {
         })
         .arced()
     }
+
     pub fn ungrouped_aggregate(
         input: LocalPhysicalPlanRef,
         aggregations: Vec<BoundAggExpr>,
@@ -1726,6 +1727,7 @@ pub struct UDFProject {
 #[cfg_attr(debug_assertions, derive(Debug))]
 pub struct DistributedActorPoolProject {
     pub input: LocalPhysicalPlanRef,
+    // UDF 对应所有 UDFActor 实例的引用
     pub actor_objects: Vec<PyObjectWrapper>,
     pub batch_size: Option<usize>,
     pub memory_request: u64,

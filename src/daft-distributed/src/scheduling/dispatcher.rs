@@ -39,6 +39,7 @@ impl<W: Worker> Dispatcher<W> {
         let mut worker_to_tasks = HashMap::new();
         let mut task_context_to_task = HashMap::new();
 
+        // 遍历可以调度的 Task 列表，按照 worker 分组
         for scheduled_task in scheduled_tasks {
             let worker_id = scheduled_task.worker_id();
             let task = scheduled_task.task();
@@ -49,8 +50,10 @@ impl<W: Worker> Dispatcher<W> {
                 .push(task);
         }
 
+        // 向目标 Worker 提交一批 Task
         let result_handles = worker_manager.submit_tasks_to_workers(worker_to_tasks)?;
 
+        // 处理 Task 执行结果
         for result_handle in result_handles {
             let scheduled_task = task_context_to_task
                 .remove(&result_handle.task_context())
@@ -77,7 +80,7 @@ impl<W: Worker> Dispatcher<W> {
         let mut failed_tasks = Vec::new();
         let mut task_results = Vec::new();
 
-        // Wait for at least one task to complete
+        // Wait for at least one task to complete，等待至少一个 Task 执行完成，返回对应的 SwordfishTask 对应的 TaskStatus
         if let Some((id, task_result)) = self.task_result_joinset.join_next_with_id().await {
             let scheduled_task = self
                 .joinset_id_to_task
@@ -106,6 +109,7 @@ impl<W: Worker> Dispatcher<W> {
                 // Send the event to the statistics manager
                 statistics_manager.handle_event((task.task_context(), &task_result).into())?;
 
+                // 按照任务的执行状态分别处理，对于执行成功的 Task，将对应的 MaterializedOutput 投递给 Result Channel
                 match task_result {
                     Ok(task_status) => match task_status {
                         // Task completed successfully, send the result to the result_tx

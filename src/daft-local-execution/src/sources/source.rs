@@ -209,10 +209,12 @@ impl PipelineNode for SourceNode {
     ) -> crate::Result<Receiver<Arc<MicroPartition>>> {
         let source = self.source.clone();
         let io_stats = self.runtime_stats.io_stats.clone();
+        // 获取关联的 RuntimeStatsManagerHandle 实例
         let stats_manager = runtime_handle.stats_manager();
         let node_id = self.node_id();
 
         let (destination_sender, destination_receiver) = create_channel(0);
+        // counting_sender 会将本次 emit 的行数记录到 runtime stats
         let counting_sender = CountingSender::new(destination_sender, self.runtime_stats.clone());
         let chunk_size = match self.morsel_size_requirement {
             MorselSizeRequirement::Strict(size) => size,
@@ -247,6 +249,7 @@ impl PipelineNode for SourceNode {
         );
         Ok(destination_receiver)
     }
+
     fn as_tree_display(&self) -> &dyn TreeDisplay {
         self
     }

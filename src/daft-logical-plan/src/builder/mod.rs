@@ -248,16 +248,20 @@ impl LogicalPlanBuilder {
     }
 
     pub fn with_columns(&self, columns: Vec<ExprRef>) -> DaftResult<Self> {
+        // 创建表达式解析器
         let expr_resolver = ExprResolver::builder()
             .allow_actor_pool_udf(true)
             .allow_monotonic_id(true)
             .allow_explode(true)
             .build();
 
+        // 解析输入的表达式
         let columns = expr_resolver.resolve(columns, self.plan.clone())?;
 
         let schema = self.schema();
+        // Schema 中所有列名集合
         let current_col_names = schema.field_names().collect::<HashSet<_>>();
+        // 基于传入的 columns 构造 name -> expr 的映射
         let new_col_name_and_exprs = columns
             .iter()
             .map(|e| (e.name(), e.clone()))
@@ -953,7 +957,7 @@ impl LogicalPlanBuilder {
                         rule_batch,
                         pass,
                         if seen { "an already seen" } else { "a new" },
-                        new_plan.repr_ascii(true),
+                        new_plan.repr_ascii(false),
                     );
                 } else {
                     log::debug!(

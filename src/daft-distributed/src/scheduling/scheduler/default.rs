@@ -48,7 +48,9 @@ impl<T: Task> DefaultScheduler<T> {
     fn try_schedule_spread_task(&self, task: &T) -> Option<WorkerId> {
         self.worker_snapshots
             .iter()
+            // 筛选出满足资源需求的节点，考虑 GPU 和 CPU 资源
             .filter(|(_, worker)| worker.can_schedule_task(task))
+            // 选择可用资源最多的节点
             .max_by_key(|(_, worker)| {
                 (worker.available_num_cpus() + worker.available_num_gpus()) as usize
             })
@@ -69,6 +71,7 @@ impl<T: Task> DefaultScheduler<T> {
             return Some(worker.worker_id.clone());
         }
         // Fallback to spread scheduling if soft is true
+        // 没有亲和性节点，且 soft 为 true，fallback 到 Spread 调度
         if soft {
             self.try_schedule_spread_task(task)
         } else {
@@ -78,33 +81,41 @@ impl<T: Task> DefaultScheduler<T> {
 
     fn try_schedule_task(&self, task: &PendingTask<T>) -> Option<WorkerId> {
         match task.strategy() {
+            // 节点均衡性策略，选择满足资源需求且可用资源最多的 Worker 节点
             SchedulingStrategy::Spread => self.try_schedule_spread_task(&task.task),
+            // 节点亲和性策略，如果不满足且 soft=true 时 fallback 到 Spread 调度
             SchedulingStrategy::WorkerAffinity { worker_id, soft } => {
                 self.try_schedule_worker_affinity_task(&task.task, worker_id, *soft)
             }
         }
     }
 
+    // 存在以下情况时需要执行扩容：
+    // 1. 集群没有可用的 worker 的节点
+    // 2. 集群待调度执行的 Task 数目超过集群可用 CPU 核数的 25%
     fn needs_autoscaling(&self) -> bool {
         // If there are no pending tasks, we don't need to autoscale
+        // 没有带调度执行的 Task
         if self.pending_tasks.is_empty() {
             return false;
         }
 
         // If there are no workers, we need to autoscale
+        // 没有可以调度的 Worker 节点
         if self.worker_snapshots.is_empty() {
             return true;
         }
 
         // If the ratio of pending tasks to total capacity is greater than the autoscaling threshold, we need to autoscale
+        // 计算当前集群总的 CPU 核数
         let total_capacity: usize = self
             .worker_snapshots
             .values()
             .map(|worker| worker.total_num_cpus() as usize)
             .sum();
 
+        // 如果集群等待调度的 Task 数目超过集群可用 CPU 核数的 25%，则需要扩缩容
         let ratio = self.pending_tasks.len() as f64 / total_capacity as f64;
-
         ratio > self.autoscaling_threshold
     }
 }
@@ -121,15 +132,20 @@ impl<T: Task> Scheduler<T> for DefaultScheduler<T> {
     fn schedule_tasks(&mut self) -> Vec<ScheduledTask<T>> {
         let mut scheduled = Vec::new();
         let mut unscheduled = Vec::new();
+        // 获取待执行的 SwordfishTask
         while let Some(task) = self.pending_tasks.pop() {
+            // 依据任务的 SchedulingStrategy 进行调度，目前支持 Spread 和 WorkerAffinity 两种策略
             if let Some(worker_id) = self.try_schedule_task(&task) {
+                // 记录 Task 信息到 WorkerSnapshot 中
                 self.worker_snapshots
                     .get_mut(&worker_id)
                     .expect("Worker should be present in DefaultScheduler")
                     .active_task_details
                     .insert(task.task_context(), TaskDetails::from(&task.task));
+                // 记录已经调度的 SwordfishTask
                 scheduled.push(ScheduledTask::new(task, worker_id));
             } else {
+                // 对于未匹配到合适资源的 Task，记录到 unscheduled 中，等待重新调度
                 unscheduled.push(task);
             }
         }
@@ -150,6 +166,7 @@ impl<T: Task> Scheduler<T> for DefaultScheduler<T> {
 
     fn get_autoscaling_request(&mut self) -> Option<Vec<TaskResourceRequest>> {
         // If we need to autoscale, return the resource requests of the pending tasks
+        // 检查是否需要执行 AutoScaling，需要的话则依据当前待调度的 Task 计算需要的资源数
         let needs_autoscaling = self.needs_autoscaling();
         needs_autoscaling.then(|| {
             self.pending_tasks

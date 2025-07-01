@@ -1,3 +1,5 @@
+use std::fmt::{Display, Formatter};
+
 use crate::{
     dynamic_batching::{BatchingState, BatchingStrategy},
     pipeline::MorselSizeRequirement,
@@ -23,6 +25,12 @@ impl BatchingState for () {
         _batch_size: usize,
         _duration: std::time::Duration,
     ) {
+    }
+}
+
+impl Display for StaticBatchingStrategy {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Static")
     }
 }
 

@@ -512,6 +512,7 @@ impl ScanOperator for GlobScanOperator {
         let schema = self.schema.clone();
         let storage_config = self.storage_config.clone();
 
+        // 处理 Parquet 格式
         let row_groups = if let FileFormatConfig::Parquet(ParquetSourceConfig {
             row_groups: Some(row_groups),
             ..

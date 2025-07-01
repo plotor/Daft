@@ -40,6 +40,7 @@ impl ActorHandle {
                 .map(|e| e.inner)
                 .collect::<Vec<_>>();
 
+            // 将 UDFActor 实例分为本地和远程两类
             let (local_actors, remote_actors) = Python::attach(|py| {
                 let actor_handles = actor_handles
                     .into_iter()
@@ -111,14 +112,17 @@ pub(crate) struct DistributedActorPoolProjectOperator {
 
 impl DistributedActorPoolProjectOperator {
     pub fn try_new(
+        // UDF 对应所有 UDFActor 实例的引用
         actor_handles: Vec<impl Into<ActorHandle>>,
         batch_size: Option<usize>,
         memory_request: u64,
     ) -> DaftResult<Self> {
         let actor_handles: Vec<ActorHandle> = actor_handles.into_iter().map(|e| e.into()).collect();
+        // 将 UDFActor 实例分为本地和远程两类
         let (local_actor_handles, remote_actor_handles) =
             ActorHandle::get_actors_on_current_node(actor_handles)?;
 
+        // 优先使用本地 UDFActor 实例
         let actor_handles = match local_actor_handles.len() {
             0 => remote_actor_handles,
             _ => local_actor_handles,
@@ -152,6 +156,11 @@ impl IntermediateOperator for DistributedActorPoolProjectOperator {
         let memory_request = self.memory_request;
         #[cfg(feature = "python")]
         {
+            // 调用 UDFActor 的 eval_input 方法
+            println!(
+                ">> DistributedActorPoolProjectOperator::execute with columns: [{}]",
+                input.column_names().join(", ")
+            );
             let fut = task_spawner.spawn_with_memory_request(
                 memory_request,
                 async move {
@@ -193,6 +202,7 @@ impl IntermediateOperator for DistributedActorPoolProjectOperator {
         // Check if we need to initialize the filtered actor handles
         #[cfg(feature = "python")]
         {
+            // 从 UDFActor 候选列表中轮询选择
             let next_actor_handle_idx =
                 self.counter.fetch_add(1, Ordering::SeqCst) % self.actor_handles.len();
             let next_actor_handle = &self.actor_handles[next_actor_handle_idx];

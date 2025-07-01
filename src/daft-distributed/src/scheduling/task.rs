@@ -209,11 +209,17 @@ impl TaskPriority for SwordfishTaskPriority {}
 
 #[derive(Debug, Clone)]
 pub(crate) struct SwordfishTask {
+    // 任务上下文，包含所属的 Query，ID 等信息
     task_context: TaskContext,
+    // 可被 Swordfish 引擎执行的物理执行计划
     plan: LocalPhysicalPlanRef,
+    // 任务资源需求情况
     resource_request: TaskResourceRequest,
+    // 任务执行配置信息
     config: Arc<DaftExecutionConfig>,
+    // 任务需要处理的数据分区信息
     psets: HashMap<String, Vec<PartitionRef>>,
+    // 调度策略：节点亲和性 or 随机
     strategy: SchedulingStrategy,
     context: HashMap<String, String>,
 }
@@ -229,6 +235,15 @@ impl SwordfishTask {
     ) -> Self {
         let resource_request = TaskResourceRequest::new(plan.resource_request());
         context.insert("task_id".to_string(), task_context.task_id.to_string());
+
+        // println!(
+        //     ">> Create SwordfishTask-{}: last_node_id: {}, node_ids: [{}], plan: {}, psets: {}",
+        //     task_context.task_id,
+        //     task_context.last_node_id,
+        //     task_context.node_ids.clone().into_iter().join(", "),
+        //     plan.single_line_display(),
+        //     psets.keys().join(", ")
+        // );
 
         Self {
             task_context,
