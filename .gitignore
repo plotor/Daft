@@ -73,3 +73,5 @@ AGENTS.md
 CLAUDE.local.md
 .claude/**/*.md
 .beads
+
+tests/**/test_debug.py

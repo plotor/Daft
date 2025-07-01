@@ -53,11 +53,13 @@ class UDFActorHandle:
         ray.kill(self.actor)
 
 
+# 将 UDFActor 实例分为本地和远程两类
 def get_ready_actors_by_location(
     actor_handles: list[UDFActorHandle],
 ) -> tuple[list[UDFActorHandle], list[UDFActorHandle]]:
     from ray._private.state import actors
 
+    # 获取当前节点 ID
     current_node_id = ray.get_runtime_context().get_node_id()
 
     local_actors = []

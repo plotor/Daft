@@ -1,4 +1,9 @@
-use std::{collections::VecDeque, num::NonZeroUsize, time::Duration};
+use std::{
+    collections::VecDeque,
+    fmt::{Display, Formatter},
+    num::NonZeroUsize,
+    time::Duration,
+};
 
 use crate::{
     dynamic_batching::{BatchingState, BatchingStrategy},
@@ -137,6 +142,12 @@ impl LatencyConstrainedBatchingState {
             recent_latencies: VecDeque::with_capacity(Self::WINDOW_SIZE),
             recent_batch_sizes: VecDeque::with_capacity(Self::WINDOW_SIZE),
         }
+    }
+}
+
+impl Display for LatencyConstrainedBatchingStrategy {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "LatencyConstrained")
     }
 }
 
