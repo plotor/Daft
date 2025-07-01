@@ -340,11 +340,14 @@ impl IntermediateOperator for UdfOperator {
     #[instrument(skip_all, name = "UdfOperator::execute")]
     fn execute(
         &self,
-        input: Arc<MicroPartition>,
+        input: Arc<MicroPartition>, // 当前的输入
         mut state: Self::State,
         task_spawner: &ExecutionTaskSpawner,
     ) -> IntermediateOpExecuteResult<Self> {
         let memory_request = self.memory_request;
+
+        // 尝试申请对应数量的内存（这里的申请只是一个逻辑的概念，并不会真正申请，也可以是 0），并执行 UDF
+        println!(">> Execute udf with memory request: {}", memory_request);
         let fut = task_spawner.spawn_with_memory_request(
             memory_request,
             async move {

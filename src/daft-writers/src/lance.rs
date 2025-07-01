@@ -39,11 +39,15 @@ impl AsyncFileWriter for LanceWriter {
             .size_bytes()
             .expect("MicroPartition should have size_bytes for LanceWriter");
         Python::with_gil(|py| {
+            // 调用 py 方法，将 MicroPartition 转换成 PyMicroPartition
             let py_micropartition = py
                 .import(pyo3::intern!(py, "daft.recordbatch"))?
                 .getattr(pyo3::intern!(py, "MicroPartition"))?
                 .getattr(pyo3::intern!(py, "_from_pymicropartition"))?
                 .call1((PyMicroPartition::from(data),))?;
+            // 执行：
+            // 1. 执行 write_lance 方法以 write_fragments 的方式将 MicroPartition 写成 lance 文件，并封装 fragments 列表到 MicroPartition 中返回
+            // 2. 执行 MicroPartition#to_record_batch 方法拿到最终的 PyRecordBatch
             let written_fragments: PyRecordBatch = py
                 .import(pyo3::intern!(py, "daft.recordbatch.recordbatch_io"))?
                 .getattr(pyo3::intern!(py, "write_lance"))?

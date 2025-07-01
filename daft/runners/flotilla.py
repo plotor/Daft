@@ -37,7 +37,7 @@ try:
 except ImportError:
     raise
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("ray")
 
 
 @ray.remote
@@ -66,6 +66,7 @@ class RaySwordfishActor:
             psets_mp = {k: [v._micropartition for v in v] for k, v in psets.items()}
 
             metas = []
+            # 采用 Swordfish Native 引擎执行 LocalPhysicalPlan
             native_executor = NativeExecutor()
             async for partition in native_executor.run_async(plan, psets_mp, exec_cfg, None, context):
                 if partition is None:
@@ -161,6 +162,7 @@ class RaySwordfishActorHandle:
 
     def submit_task(self, task: RaySwordfishTask) -> RaySwordfishTaskHandle:
         psets = {k: [v.object_ref for v in v] for k, v in task.psets().items()}
+        # 调用 RaySwordfishActor#run_plan 方法
         result_handle = self.actor_handle.run_plan.options(name=task.name()).remote(
             task.plan(), task.config(), psets, task.context()
         )
@@ -175,6 +177,7 @@ class RaySwordfishActorHandle:
 
 def start_ray_workers(existing_worker_ids: list[str]) -> list[RaySwordfishWorker]:
     handles = []
+    # 遍历处理 Ray 的所有节点
     for node in ray.nodes():
         if (
             "Resources" in node
@@ -243,6 +246,8 @@ class RemoteFlotillaRunner:
             RayMaterializedResult,
         )
 
+        print(f">> FlotillaPlanRunner#get_next_partition: {plan_id}")
+
         if plan_id not in self.curr_result_gens:
             raise ValueError(f"Plan {plan_id} not found in FlotillaPlanRunner")
 
@@ -282,6 +287,7 @@ class FlotillaRunner:
     """FlotillaRunner is a wrapper around FlotillaRunnerCore that provides a Ray actor interface."""
 
     def __init__(self) -> None:
+        # 获取 Head 节点 ID
         head_node_id = get_head_node_id()
         self.runner = RemoteFlotillaRunner.options(  # type: ignore
             name=FLOTILLA_RUNNER_NAME,
@@ -303,8 +309,10 @@ class FlotillaRunner:
         partition_sets: dict[str, PartitionSet[ray.ObjectRef]],
     ) -> Iterator[RayMaterializedResult]:
         plan_id = plan.id()
+        # 调用 RemoteFlotillaRunner#run_plan 执行 PhysicalPlan
         ray.get(self.runner.run_plan.remote(plan, partition_sets))
         while True:
+            # TODO by zhenchao 这里是获取已处理完成的分区数据？
             materialized_result = ray.get(self.runner.get_next_partition.remote(plan_id))
             if materialized_result is None:
                 break

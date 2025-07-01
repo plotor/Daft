@@ -115,6 +115,7 @@ impl TreeNodeVisitor for LogicalPlanToPipelineNodeTranslator {
                     ),
                 }
             }
+            // 如果 UDF 设置 concurrency 则使用 ActorUDF
             LogicalPlan::UDFProject(udf) if udf.is_actor_pool_udf() => {
                 #[cfg(feature = "python")]
                 {
@@ -142,6 +143,7 @@ impl TreeNodeVisitor for LogicalPlanToPipelineNodeTranslator {
                     panic!("ActorUDF is not supported without Python feature")
                 }
             }
+            // 如果 UDF 没有设置 concurrency 则使用 UDFNode
             LogicalPlan::UDFProject(udf) => {
                 let expr = BoundExpr::try_new(udf.expr.clone(), &udf.input.schema())?;
                 let passthrough_columns =
