@@ -97,6 +97,7 @@ impl Stage {
         let mut stage_context = StageExecutionContext::new(scheduler_handle);
         match &self.type_ {
             StageType::MapPipeline { plan } => {
+                // 这里通常是一个 Stage 算子树的根节点
                 let pipeline_node =
                     logical_plan_to_pipeline_node(stage_config, plan.clone(), Arc::new(psets))?;
                 let running_node = pipeline_node.produce_tasks(&mut stage_context);

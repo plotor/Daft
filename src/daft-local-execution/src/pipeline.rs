@@ -231,6 +231,7 @@ pub fn viz_pipeline_ascii(root: &dyn PipelineNode, simple: bool) -> String {
     s
 }
 
+/// 将逻辑物理计划（LocalPhysicalPlan）转换为可执行的流水线节点（PipelineNode）
 pub fn physical_plan_to_pipeline(
     physical_plan: &LocalPhysicalPlan,
     psets: &(impl PartitionSetCache<MicroPartitionRef, Arc<MicroPartitionSet>> + ?Sized),
@@ -251,6 +252,7 @@ pub fn physical_plan_to_pipeline(
             let source = EmptyScanSource::new(schema.clone());
             SourceNode::new(source.arced(), stats_state.clone(), ctx).boxed()
         }
+        // 创建数据源节点
         LocalPhysicalPlan::PhysicalScan(PhysicalScan {
             scan_tasks,
             pushdowns,
@@ -398,6 +400,7 @@ pub fn physical_plan_to_pipeline(
             .arced();
             SourceNode::new(in_memory_source, stats_state.clone(), ctx).boxed()
         }
+        // 转换成 ProjectOperator
         LocalPhysicalPlan::Project(Project {
             input,
             projection,

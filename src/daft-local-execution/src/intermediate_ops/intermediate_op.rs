@@ -241,9 +241,11 @@ impl<Op: IntermediateOperator + 'static> PipelineNode for IntermediateNode<Op> {
             ));
         }
         let op = self.intermediate_op.clone();
+        // 获取工作线程数
         let num_workers = op.max_concurrency().context(PipelineExecutionSnafu {
             node_name: self.name().to_string(),
         })?;
+        // 创建结果输出通道
         let (destination_sender, destination_receiver) = create_channel(0);
         let counting_sender = CountingSender::new(destination_sender, self.runtime_stats.clone());
 

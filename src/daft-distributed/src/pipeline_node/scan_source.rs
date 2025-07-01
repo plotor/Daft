@@ -79,6 +79,7 @@ impl ScanSourceNode {
             return Ok(());
         }
 
+        // 遍历所有的 Scan Task
         for scan_task in self.scan_tasks.iter() {
             let task = self.make_source_tasks(
                 vec![scan_task.clone()].into(),
