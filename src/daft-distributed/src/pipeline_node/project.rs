@@ -124,6 +124,7 @@ impl DistributedPipelineNode for ProjectNode {
         self: Arc<Self>,
         stage_context: &mut StageExecutionContext,
     ) -> SubmittableTaskStream {
+        // DFS 遍历，并返回一个 SubmittableTaskStream
         let input_node = self.child.clone().produce_tasks(stage_context);
 
         let projection = self.projection.clone();
@@ -137,6 +138,7 @@ impl DistributedPipelineNode for ProjectNode {
             )
         };
 
+        // 将 Project 节点加入到 SubmittableTask 的执行计划中，返回更新后的 SubmittableTask
         input_node.pipeline_instruction(self.clone(), plan_builder)
     }
 

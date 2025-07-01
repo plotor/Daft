@@ -29,8 +29,8 @@ pub(crate) type PlanID = u16;
 #[derive(Serialize, Deserialize)]
 pub(crate) struct DistributedPhysicalPlan {
     id: PlanID,
-    stage_plan: StagePlan,
-    logical_plan: Arc<LogicalPlan>,
+    stage_plan: StagePlan, // 基于 LogicalPlan 构造 StagePlan，当前也只是使用 MapPipeline 封装了一把 LogicalPlan
+    logical_plan: Arc<LogicalPlan>, // 对于 LogicalPlan 的引用
 }
 
 impl DistributedPhysicalPlan {
@@ -38,6 +38,7 @@ impl DistributedPhysicalPlan {
         builder: &LogicalPlanBuilder,
         config: Arc<DaftExecutionConfig>,
     ) -> DaftResult<Self> {
+        // Optimized LogicalPlan
         let logical_plan = builder.build();
         let stage_plan = StagePlan::from_logical_plan(logical_plan.clone(), config)?;
 

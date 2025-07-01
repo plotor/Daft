@@ -39,6 +39,7 @@ impl<W: Worker> Dispatcher<W> {
         let mut worker_to_tasks = HashMap::new();
         let mut task_context_to_task = HashMap::new();
 
+        // 遍历可以调度的 Task 列表，按照 worker 分组
         for scheduled_task in scheduled_tasks {
             let worker_id = scheduled_task.worker_id();
             let task = scheduled_task.task();
@@ -49,8 +50,10 @@ impl<W: Worker> Dispatcher<W> {
                 .push(task);
         }
 
+        // 向目标 Worker 提交一批 Task
         let result_handles = worker_manager.submit_tasks_to_workers(worker_to_tasks)?;
 
+        // 处理 Task 执行结果
         for result_handle in result_handles {
             let scheduled_task = task_context_to_task
                 .remove(&result_handle.task_context())

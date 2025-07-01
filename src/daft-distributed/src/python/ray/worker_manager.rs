@@ -15,6 +15,7 @@ use crate::scheduling::{
 
 // Wrapper around the RaySwordfishWorkerManager class in the distributed_swordfish module.
 pub(crate) struct RayWorkerManager {
+    // 维护 WorkId 到 RaySwordfishWorker 之间的映射关系
     ray_workers: Arc<Mutex<HashMap<WorkerId, RaySwordfishWorker>>>,
     task_locals: pyo3_async_runtimes::TaskLocals,
 }
@@ -53,7 +54,7 @@ impl RayWorkerManager {
             workers_guard.insert(worker.id().clone(), worker);
         }
 
-        DaftResult::Ok(())
+        Ok(())
     }
 }
 
@@ -62,7 +63,7 @@ impl WorkerManager for RayWorkerManager {
 
     fn submit_tasks_to_workers(
         &self,
-        tasks_per_worker: HashMap<WorkerId, Vec<SwordfishTask>>,
+        tasks_per_worker: HashMap<WorkerId, Vec<SwordfishTask>>, // 待分发给每个 Worker 的 Task 列表
     ) -> DaftResult<Vec<RayTaskResultHandle>> {
         Python::with_gil(|py| {
             // Refresh workers before submitting tasks to ensure we have the latest workers
@@ -75,13 +76,14 @@ impl WorkerManager for RayWorkerManager {
                 .lock()
                 .expect("Failed to lock RayWorkerManager");
             for (worker_id, tasks) in tasks_per_worker {
+                // 依据 worker_id 获取对应的 RaySwordfishWorker 实例，并执行 submit_tasks 方法向目标 Worker 提交一批 Task
                 let handles = workers
                     .get_mut(&worker_id)
                     .expect("Worker should be present in RayWorkerManager")
                     .submit_tasks(tasks, py, &self.task_locals)?;
                 task_result_handles.extend(handles);
             }
-            DaftResult::Ok(task_result_handles)
+            Ok(task_result_handles)
         })
     }
 

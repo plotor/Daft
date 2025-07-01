@@ -157,6 +157,7 @@ impl LimitNode {
             // Submit tasks until we have max_concurrent_tasks or we run out of input
             for _ in 0..max_concurrent_tasks {
                 if let Some(task) = input.next().await {
+                    // 将新的计算节点加入到 SubmittableTask 中的执行计划中，返回更新后的 SubmittableTask
                     let task_with_limit = append_plan_to_existing_task(
                         task,
                         &(self.clone() as Arc<dyn DistributedPipelineNode>),
@@ -169,6 +170,7 @@ impl LimitNode {
                             )
                         },
                     );
+                    // 提交任务给 Scheduler，并记录已经提交的 Task
                     let future = task_with_limit.submit(&scheduler_handle)?;
                     local_limits.push_back(future);
                 } else {
@@ -180,6 +182,8 @@ impl LimitNode {
             let mut total_num_rows = 0;
             // Process results from all local limit tasks
             let mut downstream_tasks = vec![];
+
+            // 遍历等待所有已经提交的 Task，并处理执行结果
             for future in local_limits {
                 let maybe_result = future.await?;
                 if let Some(materialized_output) = maybe_result {

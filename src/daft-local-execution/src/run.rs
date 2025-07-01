@@ -283,8 +283,10 @@ impl NativeExecutor {
         start_chrome_trace();
         let cancel = self.cancel.clone();
         let ctx = RuntimeContext::new_with_context(additional_context.unwrap_or_default());
+        // 基于物理执行计划构建 Pipeline 管道
         let pipeline = translate_physical_plan_to_pipeline(local_physical_plan, psets, &cfg, &ctx)?;
 
+        // 创建生产者消费者管道，基于 Kanal 实现
         let (tx, rx) = create_channel(results_buffer_size.unwrap_or(0));
 
         let rt = self.runtime.clone();
@@ -301,9 +303,12 @@ impl NativeExecutor {
                 )
             });
 
+            // 创建 RuntimeStatsManager 实例
             let stats_manager = RuntimeStatsManager::new(runtime.handle(), &pipeline);
+            // 创建与当前 RuntimeStatsManager 关联的 RuntimeStatsManagerHandle，绑定一个 node 消息发送器
             let stats_manager_handle = stats_manager.handle();
             let execution_task = async {
+                // 获取 or 创建内存管理器
                 let memory_manager = get_or_init_memory_manager();
                 let mut runtime_handle =
                     ExecutionRuntimeContext::new(memory_manager.clone(), stats_manager_handle);
@@ -345,9 +350,10 @@ impl NativeExecutor {
                 result
             })?;
 
-            // Finish the stats manager
+            // 发送 finish 信号，让 RuntimeStatsManager 事件循环退出
             stats_manager.finish(&runtime);
 
+            // 以 mermaid 格式写 explain analyze 结果
             if enable_explain_analyze {
                 let curr_ms = SystemTime::now()
                     .duration_since(UNIX_EPOCH)
@@ -366,7 +372,11 @@ impl NativeExecutor {
                     )
                 )?;
             }
+
+            // 刷新 OpenTelemetry 指标
             flush_opentelemetry_providers();
+
+            // 写 chrome trace
             finish_chrome_trace();
             Ok(())
         });

@@ -288,6 +288,7 @@ impl DistributedPipelineNode for ActorUDF {
         self: Arc<Self>,
         stage_context: &mut StageExecutionContext,
     ) -> SubmittableTaskStream {
+        // DFS 遍历
         let input_node = self.child.clone().produce_tasks(stage_context);
 
         let (result_tx, result_rx) = create_channel(1);

@@ -30,6 +30,7 @@ pub trait RuntimeStats: Send + Sync + std::any::Any {
 
     // Default required properties. TODO: Consider removing?
     fn add_rows_received(&self, rows: u64);
+    // 添加 emit 了多少行数据
     fn add_rows_emitted(&self, rows: u64);
     fn add_cpu_us(&self, cpu_us: u64);
 }

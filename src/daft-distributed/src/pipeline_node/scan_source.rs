@@ -73,12 +73,14 @@ impl ScanSourceNode {
         task_id_counter: TaskIDCounter,
     ) -> DaftResult<()> {
         if self.scan_tasks.is_empty() {
+            // 创建空的 ScanTask，封装成 SubmittableTask 通过 Channel 发送
             let empty_scan_task = self
                 .make_empty_scan_task(TaskContext::from((&self.context, task_id_counter.next())))?;
             let _ = result_tx.send(SubmittableTask::new(empty_scan_task)).await;
             return Ok(());
         }
 
+        // 遍历所有的 ScanTask，封装成 SubmittableTask 通过 Channel 发送
         for scan_task in self.scan_tasks.iter() {
             let task = self.make_source_tasks(
                 vec![scan_task.clone()].into(),
@@ -147,6 +149,7 @@ impl DistributedPipelineNode for ScanSourceNode {
         self: Arc<Self>,
         stage_context: &mut StageExecutionContext,
     ) -> SubmittableTaskStream {
+        // 遍历所有的 ScanTask，封装成 SubmittableTask 投递给 Result Channel
         let (result_tx, result_rx) = create_channel(1);
         let execution_loop = self.execution_loop(result_tx, stage_context.task_id_counter());
         stage_context.spawn(execution_loop);
