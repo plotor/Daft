@@ -35,7 +35,7 @@ try:
 except ImportError:
     raise
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("ray")
 
 
 @ray.remote
@@ -64,6 +64,7 @@ class RaySwordfishActor:
             psets_mp = {k: [v._micropartition for v in v] for k, v in psets.items()}
 
             metas = []
+            # 采用 Swordfish Native 引擎执行 LocalPhysicalPlan
             native_executor = NativeExecutor()
             async for partition in native_executor.run_async(plan, psets_mp, config, None, context):
                 if partition is None:
@@ -131,6 +132,7 @@ class RaySwordfishActorHandle:
 
     def submit_task(self, task: RaySwordfishTask) -> RaySwordfishTaskHandle:
         psets = {k: [v.object_ref for v in v] for k, v in task.psets().items()}
+        # 调用 RaySwordfishActor#run_plan 方法
         result_handle = self.actor_handle.run_plan.options(name=task.name()).remote(
             task.plan(), task.config(), psets, task.context()
         )
@@ -145,6 +147,7 @@ class RaySwordfishActorHandle:
 
 def start_ray_workers(existing_worker_ids: list[str]) -> list[RaySwordfishWorker]:
     handles = []
+    # 遍历处理 Ray 的所有节点
     for node in ray.nodes():
         if (
             "Resources" in node
@@ -214,6 +217,8 @@ class FlotillaRunnerCore:
             PartitionMetadataAccessor,
             RayMaterializedResult,
         )
+
+        print(f">> FlotillaPlanRunner#get_next_partition: {plan_id}")
 
         if plan_id not in self.curr_result_gens:
             raise ValueError(f"Plan {plan_id} not found in FlotillaPlanRunner")

@@ -62,7 +62,6 @@ if TYPE_CHECKING:
     from daft.io import DataSink
     from daft.logical.schema import Schema
 
-
 # A PhysicalPlan that is still being built - may yield both PartitionTaskBuilders and PartitionTasks.
 InProgressPhysicalPlan = Iterator[Union[None, PartitionTask[PartitionT], PartitionTaskBuilder[PartitionT]]]
 
@@ -1383,6 +1382,9 @@ def global_limit(
                 instruction=execution_step.GlobalLimit(limit),
             )
 
+            print(
+                f"yield global_limit_step, limit: {limit}, remaining_rows: {remaining_rows}, task_rows: {done_task_metadata.num_rows}"
+            )
             yield global_limit_step
             remaining_partitions -= 1
             remaining_rows -= limit
@@ -1432,11 +1434,13 @@ def global_limit(
                 if len(materializations) == 0 and remaining_rows > 0 and partial_meta.num_rows is not None:
                     limit = min(remaining_rows, partial_meta.num_rows)
                     child_step = child_step.add_instruction(instruction=execution_step.LocalLimit(limit))
+                    print(f"Yield local limit: {limit}")
 
                     remaining_partitions -= 1
                     remaining_rows -= limit
                 else:
                     child_step = child_step.finalize_partition_task_single_output(stage_id=stage_id)
+                    print(f"materializations local limit: {remaining_rows}")
                     materializations.append(child_step)
             yield child_step
 

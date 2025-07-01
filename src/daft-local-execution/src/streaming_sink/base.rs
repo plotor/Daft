@@ -240,6 +240,7 @@ impl PipelineNode for StreamingSinkNode {
             self.runtime_stats.clone(),
         );
         let mut child_result_receivers = Vec::with_capacity(self.children.len());
+        // 递归启动子节点
         for child in &self.children {
             let child_result_receiver = child.start(maintain_order, runtime_handle)?;
             child_result_receivers.push(CountingReceiver::new(
@@ -250,6 +251,7 @@ impl PipelineNode for StreamingSinkNode {
             ));
         }
 
+        // 创建结果输出通道
         let (destination_sender, destination_receiver) = create_channel(0);
         let counting_sender = CountingSender::new(
             destination_sender,

@@ -224,6 +224,7 @@ impl TaskPriority for SwordfishTaskPriority {}
 #[derive(Debug, Clone)]
 pub(crate) struct SwordfishTask {
     task_context: TaskContext,
+    // Swordfish 引擎的物理计划
     plan: LocalPhysicalPlanRef,
     resource_request: TaskResourceRequest,
     config: Arc<DaftExecutionConfig>,

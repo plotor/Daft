@@ -83,13 +83,16 @@ class NativeRunner(Runner[MicroPartition]):
         daft_execution_config = get_context().daft_execution_config
 
         # Optimize the logical plan.
+        # 对 LogicalPlan 进行优化得到 Optimized LogicalPlan
         builder = builder.optimize()
 
         # NOTE: ENABLE FOR DAFT-PROTO TESTING
         # builder = _to_from_proto(builder)
 
+        # 将 Optimized LogicalPlan 转换成 PhysicalPlan
         plan = LocalPhysicalPlan.from_logical_plan_builder(builder._builder)
         executor = NativeExecutor()
+        # 执行 PhysicalPlan
         results_gen = executor.run(
             plan,
             {k: v.values() for k, v in self._part_set_cache.get_all_partition_sets().items()},
