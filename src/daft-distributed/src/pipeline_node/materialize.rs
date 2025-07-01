@@ -26,6 +26,8 @@ pub(crate) fn materialize_all_pipeline_outputs<T: Task>(
         scheduler_handle: SchedulerHandle<T>,
     ) -> DaftResult<()> {
         while let Some(pipeline_output) = input.next().await {
+            // 提交 SubmittedTask 给 Scheduler
+            println!(">> submit task: {}", pipeline_output.task().task_name());
             let finalized_task = pipeline_output.submit(&scheduler_handle)?;
             if tx.send(finalized_task).await.is_err() {
                 break;
@@ -41,14 +43,19 @@ pub(crate) fn materialize_all_pipeline_outputs<T: Task>(
     ) -> DaftResult<()> {
         let mut pending_tasks: OrderedJoinSet<DaftResult<Option<MaterializedOutput>>> =
             OrderedJoinSet::new();
+
         loop {
             let num_pending = pending_tasks.num_pending();
             tokio::select! {
                 biased;
+                // 将已经提交的 Task 记录到 pending_tasks 中
                 Some(finalized_task) = finalized_tasks_receiver.recv() => {
+                    println!(">> receive submitted task: {}, pending: {}", finalized_task.id(), num_pending);
                     pending_tasks.spawn(finalized_task);
                 }
-                Some(result) = pending_tasks.join_next(), if num_pending > 0 => {
+
+                // 当存在 pending_tasks 时，等待任务完成并返回执行结果
+                Some(result) = pending_tasks.join_next(), if num_pending > 0 => { // 当 num_pending > 0 时执行 join_next 方法
                     match result {
                         Ok(Ok(Some(materialized_output))) => {
                             if tx.send(Ok(materialized_output)).await.is_err() {
@@ -76,13 +83,16 @@ pub(crate) fn materialize_all_pipeline_outputs<T: Task>(
     let (materialized_results_sender, materialized_results_receiver) = create_channel(1);
 
     let mut joinset = joinset.unwrap_or_else(JoinSet::new);
+    // 异步提交任务流中所有的 SubmittableTask 任务给 Scheduler
     joinset.spawn(task_finalizer(
         input,
         finalized_tasks_sender,
         scheduler_handle,
     ));
+
+    // 异步等待已提交的任务执行完成，并获取执行结果投递给 materialized_results_sender 管道
     joinset.spawn(task_materializer(
-        finalized_tasks_receiver,
+        finalized_tasks_receiver, // task_finalizer 中提交的任务会被 finalized_tasks_receiver 接收
         materialized_results_sender,
     ));
 

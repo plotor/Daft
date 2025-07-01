@@ -21,6 +21,7 @@ pub(crate) use scheduler_actor::{
 use tokio_util::sync::CancellationToken;
 
 pub(super) trait Scheduler<T: Task>: Send + Sync {
+    /// 更新当前 Scheduler 当前维护的 Worker 信息快照
     fn update_worker_state(&mut self, worker_snapshots: &[WorkerSnapshot]);
     fn enqueue_tasks(&mut self, tasks: Vec<PendingTask<T>>);
     fn schedule_tasks(&mut self) -> Vec<ScheduledTask<T>>;

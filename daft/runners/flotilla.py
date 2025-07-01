@@ -77,6 +77,8 @@ class RaySwordfishActor:
             psets_mp = {k: [v._micropartition for v in v] for k, v in psets.items()}
 
             metas = []
+
+            # 创建 Swordfish 执行器
             native_executor = NativeExecutor()
             ctx = PyDaftContext()
             ctx._daft_execution_config = exec_cfg
@@ -253,6 +255,9 @@ class RemoteFlotillaRunner:
             for k, v in partition_sets.items()
         }
         self.curr_plans[plan.idx()] = plan
+
+        print(f">> run plan {plan.idx()} with psets: {psets.keys()}, curr plans: {self.curr_plans.keys()}")
+
         self.curr_result_gens[plan.idx()] = self.plan_runner.run_plan(plan, psets)
 
     async def get_next_partition(self, plan_id: str) -> RayMaterializedResult | None:
@@ -301,6 +306,7 @@ class FlotillaRunner:
 
     def __init__(self) -> None:
         head_node_id = get_head_node_id()
+        print(f">> start RemoteFlotillaRunner on node: {head_node_id}")
         self.runner = RemoteFlotillaRunner.options(  # type: ignore
             name=FLOTILLA_RUNNER_NAME,
             namespace=FLOTILLA_RUNNER_NAMESPACE,
@@ -308,7 +314,7 @@ class FlotillaRunner:
             scheduling_strategy=(
                 ray.util.scheduling_strategies.NodeAffinitySchedulingStrategy(
                     node_id=head_node_id,
-                    soft=False,
+                    soft=False,  # 硬约束
                 )
                 if head_node_id is not None
                 else "DEFAULT"
@@ -322,8 +328,11 @@ class FlotillaRunner:
     ) -> Iterator[RayMaterializedResult]:
         plan_id = plan.idx()
         ray.get(self.runner.run_plan.remote(plan, partition_sets))
+        cnt = 0
         while True:
+            print(f">> {plan_id}:{cnt} get next partition")
             materialized_result = ray.get(self.runner.get_next_partition.remote(plan_id))
+            cnt += 1
             if materialized_result is None:
                 break
             yield materialized_result
