@@ -266,9 +266,11 @@ impl PipelineNode for IntermediateNode {
             ));
         }
         let op = self.intermediate_op.clone();
+        // 获取工作线程数
         let num_workers = op.max_concurrency().context(PipelineExecutionSnafu {
             node_name: self.name(),
         })?;
+        // 创建结果输出通道
         let (destination_sender, destination_receiver) = create_channel(0);
         let counting_sender = CountingSender::new(
             destination_sender,
@@ -277,6 +279,7 @@ impl PipelineNode for IntermediateNode {
             runtime_handle.runtime_stats_handler(),
         );
 
+        println!(">> IntermediateNode::start: {}, num_workers: {}", self.name(), num_workers);
         let dispatch_spawner = self
             .intermediate_op
             .dispatch_spawner(runtime_handle, maintain_order);

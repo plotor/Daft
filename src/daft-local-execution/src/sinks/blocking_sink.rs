@@ -233,6 +233,7 @@ impl PipelineNode for BlockingSinkNode {
         let runtime_stats = self.runtime_stats.clone();
         let num_workers = op.max_concurrency();
 
+        println!(">> BlockingSinkNode::start: {}, num_workers: {}", self.name(), num_workers);
         let dispatch_spawner = op.dispatch_spawner(runtime_handle);
         let spawned_dispatch_result = dispatch_spawner.spawn_dispatch(
             vec![counting_receiver],

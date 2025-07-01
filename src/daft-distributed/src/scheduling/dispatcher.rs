@@ -42,6 +42,7 @@ impl<W: Worker> Dispatcher<W> {
         for scheduled_task in scheduled_tasks {
             let worker_id = scheduled_task.worker_id();
             let task = scheduled_task.task();
+            // println!("Dispatching task: {:?}", task);
             task_context_to_task.insert(task.task_context(), scheduled_task);
             worker_to_tasks
                 .entry(worker_id)

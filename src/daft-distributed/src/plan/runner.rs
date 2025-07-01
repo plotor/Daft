@@ -36,6 +36,7 @@ impl<W: Worker<Task = SwordfishTask>> PlanRunner<W> {
         plan_id: PlanID,
         stage_plan: StagePlan,
         psets: HashMap<String, Vec<PartitionRef>>,
+        // Task 发送器，用于向 Scheduler 发送待执行的 Task
         scheduler_handle: SchedulerHandle<SwordfishTask>,
         sender: Sender<MaterializedOutput>,
         statistics_manager: StatisticsManagerRef,
@@ -87,12 +88,14 @@ impl<W: Worker<Task = SwordfishTask>> PlanRunner<W> {
 
         let joinset = runtime.block_on_current_thread(async move {
             let mut joinset = create_join_set();
+            // 创建 Scheduler，这里返回一个接收器，用于接收待执行的 Task
             let scheduler_handle = spawn_default_scheduler_actor(
                 self.worker_manager.clone(),
                 &mut joinset,
                 statistics_manager.clone(),
             );
 
+            // 将 StagePlan 切分成多个 Task，并通过 scheduler_handle 发送给 Scheduler 调度执行
             joinset.spawn(async move {
                 this.execute_stages(
                     plan_id,
