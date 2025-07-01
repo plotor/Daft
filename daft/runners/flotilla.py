@@ -291,6 +291,7 @@ class FlotillaRunner:
 
     def __init__(self) -> None:
         head_node_id = get_head_node_id()
+        print(f"Start RemoteFlotillaRunner on node[{head_node_id}]")
         self.runner = RemoteFlotillaRunner.options(  # type: ignore
             name=FLOTILLA_RUNNER_NAME,
             namespace=FLOTILLA_RUNNER_NAMESPACE,
@@ -311,6 +312,7 @@ class FlotillaRunner:
         partition_sets: dict[str, PartitionSet[ray.ObjectRef]],
     ) -> Iterator[RayMaterializedResult]:
         plan_id = plan.idx()
+        print(f"Run stream plan {plan_id}, partition_sets={partition_sets.keys()}")
         ray.get(self.runner.run_plan.remote(plan, partition_sets))
         while True:
             materialized_result = ray.get(self.runner.get_next_partition.remote(plan_id))

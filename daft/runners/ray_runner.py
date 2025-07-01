@@ -1327,9 +1327,11 @@ class RayRunner(Runner[ray.ObjectRef]):
         query_id = str(uuid.uuid4())
         daft_execution_config = ctx.daft_execution_config
 
-        # Optimize the logical plan.
+        # Optimize the logical plan: LogicalPlan -> Optimized LogicalPlan
         builder = builder.optimize(daft_execution_config)
+        print(f"{query_id}: LogicalPlan -> Optimized LogicalPlan: \n{builder.pretty_print()}")
 
+        # 使用 Legacy Ray Runner
         if daft_execution_config.use_legacy_ray_runner:
             if daft_execution_config.enable_aqe:
                 adaptive_planner = builder.to_adaptive_physical_plan_scheduler(daft_execution_config)
@@ -1381,13 +1383,19 @@ class RayRunner(Runner[ray.ObjectRef]):
                     plan_scheduler, daft_execution_config, results_buffer_size=results_buffer_size
                 )
                 yield from self._stream_plan(result_uuid)
+        # 使用 Flotilla 执行引擎
         else:
+            # 将 Optimized LogicalPlan 转换成 PhysicalPlan
             distributed_plan = DistributedPhysicalPlan.from_logical_plan_builder(
                 builder._builder, query_id, daft_execution_config
             )
+            print(f"{query_id}: Optimized LogicalPlan -> PhysicalPlan: \n{distributed_plan.repr_ascii(simple=False)}")
+
+            # 创建 FlotillaRunner，期间会尽量在 Ray Head 节点上启动 RemoteFlotillaRunner Actor
             if self.flotilla_plan_runner is None:
                 self.flotilla_plan_runner = FlotillaRunner()
 
+            # 执行物理执行计划
             yield from self.flotilla_plan_runner.stream_plan(
                 distributed_plan, self._part_set_cache.get_all_partition_sets()
             )
