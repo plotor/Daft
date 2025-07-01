@@ -83,14 +83,19 @@ impl TaskResultHandle for RayTaskResultHandle {
             Ok(coroutine.into_bound(py))
         });
         async move {
+            // 等待获取 SwordfishTask 的执行结果
             let ray_task_result = fut.await;
 
             match ray_task_result {
-                Ok(RayTaskResult::Success(ray_part_refs, stats_serialized)) => {
+                Ok(RayTaskResult::Success(
+                    ray_part_refs,    // (MicroPartitions ObjectRef, num_rows, size_bytes) 列表
+                    stats_serialized, // 统计信息
+                )) => {
                     let stats: Vec<(usize, StatSnapshot)> =
                         bincode::decode_from_slice(&stats_serialized, bincode::config::legacy())
                             .expect("Failed to deserialize stats")
                             .0;
+                    // 将 SwordfishTask 执行结果转换为 MaterializedOutput
                     let materialized_output = MaterializedOutput::new(
                         ray_part_refs
                             .into_iter()

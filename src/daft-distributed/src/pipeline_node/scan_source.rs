@@ -80,11 +80,13 @@ impl ScanSourceNode {
             return Ok(());
         }
 
+        // 每个 ScanTask 封装成一个 SwordfishTask
         for scan_task in self.scan_tasks.iter() {
             let task = self.make_source_tasks(
                 vec![scan_task.clone()].into(),
                 TaskContext::from((&self.context, task_id_counter.next())),
             )?;
+
             if result_tx.send(SubmittableTask::new(task)).await.is_err() {
                 break;
             }

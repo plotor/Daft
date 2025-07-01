@@ -54,13 +54,21 @@ hooks: .venv
 build: check-toolchain .venv  ## Compile and install Daft for development
 	@unset CONDA_PREFIX && PYO3_PYTHON=$(VENV_BIN)/python $(VENV_BIN)/maturin develop --uv
 
+.PHONY: build-debug
+build-debug: check-toolchain .venv  ## Compile and install Daft for development
+	@unset CONDA_PREFIX && PYO3_PYTHON=$(VENV_BIN)/python $(VENV_BIN)/maturin build --out=/tmp/daft --interpreter $(PYTHON_VERSION)
+
 .PHONY: build-release
 build-release: check-toolchain .venv  ## Compile and install a faster Daft binary
 	@unset CONDA_PREFIX && PYO3_PYTHON=$(VENV_BIN)/python $(VENV_BIN)/maturin develop --release --uv
 
 .PHONY: build-whl
 build-whl: check-toolchain .venv  ## Compile Daft for development, only generate whl file without installation
-	cargo clean --target-dir target
+	# cargo clean --target-dir target
+	@unset CONDA_PREFIX && PYO3_PYTHON=$(VENV_BIN)/python $(VENV_BIN)/maturin build
+
+.PHONY: build-dev
+build-dev: check-toolchain .venv  ## Compile Daft for development, only generate whl file without installation
 	@unset CONDA_PREFIX && PYO3_PYTHON=$(VENV_BIN)/python $(VENV_BIN)/maturin build
 
 .PHONY: test
@@ -68,7 +76,7 @@ test: .venv build  ## Run tests
 	# You can set additional run parameters through EXTRA_ARGS, such as running a specific test case file or method:
 	# make test EXTRA_ARGS="-v tests/dataframe/test_select.py" # Run a single test file
 	# make test EXTRA_ARGS="-v tests/dataframe/test_select.py::test_select_dataframe" # Run a single test method
-	HYPOTHESIS_MAX_EXAMPLES=$(HYPOTHESIS_MAX_EXAMPLES) $(VENV_BIN)/pytest --hypothesis-seed=$(HYPOTHESIS_SEED) --ignore tests/integration $(EXTRA_ARGS)
+	HYPOTHESIS_MAX_EXAMPLES=$(HYPOTHESIS_MAX_EXAMPLES) $(VENV_BIN)/pytest -s --hypothesis-seed=$(HYPOTHESIS_SEED) --ignore tests/integration $(EXTRA_ARGS)
 
 .PHONY: doctests
 doctests: .venv

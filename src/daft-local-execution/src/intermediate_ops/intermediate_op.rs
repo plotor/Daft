@@ -187,8 +187,10 @@ impl<Op: IntermediateOperator + 'static> IntermediateNode<Op> {
         memory_manager: Arc<MemoryManager>,
         batch_manager: Arc<BatchManager<Op::BatchingStrategy>>,
     ) -> OrderingAwareReceiver<Arc<MicroPartition>> {
+        // MPSC
         let (output_sender, output_receiver) =
             create_ordering_aware_receiver_channel(maintain_order, input_receivers.len());
+        // 提交 num_worker 个 Task，每个 worker 分配一个 input_receiver 和 output_sender
         for (input_receiver, output_sender) in input_receivers.into_iter().zip(output_sender) {
             runtime_handle.spawn(
                 Self::run_worker(
@@ -302,6 +304,7 @@ impl<Op: IntermediateOperator + 'static> PipelineNode for IntermediateNode<Op> {
     ) -> crate::Result<Receiver<Arc<MicroPartition>>> {
         let mut child_result_receivers = Vec::with_capacity(self.children.len());
 
+        // 基于 DFS 策略启动子节点
         for child in &self.children {
             let child_result_receiver = child.start(maintain_order, runtime_handle)?;
             child_result_receivers.push(InitializingCountingReceiver::new(
@@ -311,11 +314,14 @@ impl<Op: IntermediateOperator + 'static> PipelineNode for IntermediateNode<Op> {
                 runtime_handle.stats_manager(),
             ));
         }
+
         let op = self.intermediate_op.clone();
+        // 计算工作线程数
         let num_workers = op.max_concurrency().context(PipelineExecutionSnafu {
             node_name: self.name().to_string(),
         })?;
 
+        // 创建 Channel: 用于
         let (destination_sender, destination_receiver) = create_channel(0);
         let counting_sender = CountingSender::new(destination_sender, self.runtime_stats.clone());
         let strategy = op.batching_strategy().context(PipelineExecutionSnafu {
@@ -325,6 +331,13 @@ impl<Op: IntermediateOperator + 'static> PipelineNode for IntermediateNode<Op> {
         let dispatch_spawner = self
             .intermediate_op
             .dispatch_spawner(batch_manager.clone(), maintain_order);
+        println!(
+            ">> Spawn Intermediate Operator {}, strategy: {}, maintain order: {}, num workers: {}",
+            op.name(),
+            op.batching_strategy().unwrap(),
+            maintain_order,
+            num_workers
+        );
         let spawned_dispatch_result = dispatch_spawner.spawn_dispatch(
             child_result_receivers,
             num_workers,
@@ -335,6 +348,7 @@ impl<Op: IntermediateOperator + 'static> PipelineNode for IntermediateNode<Op> {
             &self.name(),
         );
 
+        // 按照并发度启动多个 worker 线程，采用 MPSC 模式通信
         let mut output_receiver = self.spawn_workers(
             spawned_dispatch_result.worker_receivers,
             runtime_handle,
@@ -346,6 +360,7 @@ impl<Op: IntermediateOperator + 'static> PipelineNode for IntermediateNode<Op> {
         let node_id = self.node_id();
         runtime_handle.spawn(
             async move {
+                // 将处理结果数据继续往下传递
                 while let Some(morsel) = output_receiver.recv().await {
                     if counting_sender.send(morsel).await.is_err() {
                         return Ok(());

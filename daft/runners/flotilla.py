@@ -64,7 +64,7 @@ class RaySwordfishActor:
 
     async def run_plan(
         self,
-        plan: LocalPhysicalPlan,
+        plan: LocalPhysicalPlan,  # 这里是单个接收，并不是批量接收
         exec_cfg: PyDaftExecutionConfig,
         psets: dict[str, list[ray.ObjectRef]],
         context: dict[str, str] | None,
@@ -74,19 +74,30 @@ class RaySwordfishActor:
         from daft.daft import PyDaftContext
 
         with profile():
+            # 异步等待 get 所有的引用对象
             psets = {k: await asyncio.gather(*v) for k, v in psets.items()}
             psets_mp = {k: [v._micropartition for v in v] for k, v in psets.items()}
 
+            # for k, v in psets_mp.items():
+            #     for mp in v:
+            #         print(f">> psets key: {k}, value: {mp.column_names()}")
+
             metas = []
+
+            # 创建 Swordfish 执行器
             native_executor = NativeExecutor()
             ctx = PyDaftContext()
             ctx._daft_execution_config = exec_cfg
+            # print(f">> run plan by native executor: {plan}, psets: {psets_mp.keys()}")
             result_handle = native_executor.run(plan, psets_mp, ctx, None, context)
+            # 遍历获取任务执行输出的 MicroPartition，这里的 MP 是包含数据的
             async for partition in result_handle:
                 if partition is None:
                     break
+
                 mp = MicroPartition._from_pymicropartition(partition)
                 metas.append(PartitionMetadata.from_table(mp))
+                # print(f">> yield micro-partition from plan {plan}: {mp}")
                 yield mp
 
             stats = await result_handle.finish()
@@ -128,13 +139,17 @@ class RaySwordfishTaskHandle:
     It is used to asynchronously get the result of the task, cancel the task, and perform any post-task cleanup.
     """
 
+    # RaySwordfishActor 执行 plan 返回的结果句柄
     result_handle: ray.ObjectRef
+    # 对应 RaySwordfishActor 的引用
     actor_handle: ray.actor.ActorHandle
     task: asyncio.Task[RayTaskResult] | None = None
 
     async def _get_result(self) -> RayTaskResult:
         try:
+            # 需要等待对应的 SwordfishTask 执行完成
             await self.result_handle.completed()
+            # 遍历获取所有的 MicroPartition ObjectRef
             results = [result for result in self.result_handle]
             metadata_ref = results.pop()
 
@@ -143,7 +158,11 @@ class RaySwordfishTaskHandle:
 
             return RayTaskResult.success(
                 [
-                    RayPartitionRef(result, metadata.num_rows, metadata.size_bytes or 0)
+                    RayPartitionRef(
+                        result,  # 对应 MicroPartition 的 ObjectRef
+                        metadata.num_rows,  # 数据行数
+                        metadata.size_bytes or 0,  # 子节数
+                    )
                     for result, metadata in zip(results, task_metadata.partition_metadatas)
                 ],
                 task_metadata.stats,
@@ -175,10 +194,12 @@ class RaySwordfishActorHandle:
         self,
         actor_handle: ray.actor.ActorHandle,
     ):
+        # 对应 RaySwordfishActor 的引用
         self.actor_handle = actor_handle
 
     def submit_task(self, task: RaySwordfishTask) -> RaySwordfishTaskHandle:
         psets = {k: [v.object_ref for v in v] for k, v in task.psets().items()}
+        # 通过调用 remote 方法提交任务到 RaySwordfishActor
         result_handle = self.actor_handle.run_plan.options(name=task.name()).remote(
             task.plan(), task.config(), psets, task.context()
         )
@@ -193,6 +214,7 @@ class RaySwordfishActorHandle:
 
 def start_ray_workers(existing_worker_ids: list[str]) -> list[RaySwordfishWorker]:
     handles = []
+    # 获取 ray 的节点列表，并筛选出包含资源的节点列表
     for node in ray.nodes():
         if (
             "Resources" in node
@@ -202,6 +224,7 @@ def start_ray_workers(existing_worker_ids: list[str]) -> list[RaySwordfishWorker
             and node["Resources"]["memory"] > 0
             and node["NodeID"] not in existing_worker_ids
         ):
+            # 对于新发现的节点，在上面启动一个 RaySwordfishActor
             actor = RaySwordfishActor.options(  # type: ignore
                 scheduling_strategy=ray.util.scheduling_strategies.NodeAffinitySchedulingStrategy(
                     node_id=node["NodeID"],
@@ -211,6 +234,7 @@ def start_ray_workers(existing_worker_ids: list[str]) -> list[RaySwordfishWorker
                 num_cpus=int(node["Resources"]["CPU"]),
                 num_gpus=int(node["Resources"].get("GPU", 0)),
             )
+
             actor_handle = RaySwordfishActorHandle(actor)
             handles.append(
                 RaySwordfishWorker(
@@ -254,6 +278,12 @@ class RemoteFlotillaRunner:
             for k, v in partition_sets.items()
         }
         self.curr_plans[plan.idx()] = plan
+
+        print(
+            f">> RemoteFlotillaRunner -> DistributedPhysicalPlanRunner: "
+            f"run plan {plan.idx()} with psets: {psets.keys()}, curr plans: {self.curr_plans.keys()}"
+        )
+
         self.curr_result_gens[plan.idx()] = self.plan_runner.run_plan(plan, psets)
 
     async def get_next_partition(self, plan_id: str) -> RayMaterializedResult | None:
@@ -340,6 +370,7 @@ class FlotillaRunner:
 
     def __init__(self) -> None:
         head_node_id = get_head_node_id()
+        print(f">> start RemoteFlotillaRunner on node: {head_node_id}")
         self.runner = RemoteFlotillaRunner.options(  # type: ignore
             name=get_flotilla_runner_actor_name(),
             namespace=FLOTILLA_RUNNER_NAMESPACE,
@@ -347,7 +378,7 @@ class FlotillaRunner:
             scheduling_strategy=(
                 ray.util.scheduling_strategies.NodeAffinitySchedulingStrategy(
                     node_id=head_node_id,
-                    soft=False,
+                    soft=False,  # 硬约束
                 )
                 if head_node_id is not None
                 else "DEFAULT"
@@ -360,9 +391,18 @@ class FlotillaRunner:
         partition_sets: dict[str, PartitionSet[ray.ObjectRef]],
     ) -> Iterator[RayMaterializedResult]:
         plan_id = plan.idx()
+        print(f">> FlotillaRunner -> RemoteFlotillaRunner: run plan {plan_id}, psets: {partition_sets.keys()}")
         ray.get(self.runner.run_plan.remote(plan, partition_sets))
+        cnt = 0
         while True:
             materialized_result = ray.get(self.runner.get_next_partition.remote(plan_id))
             if materialized_result is None:
                 break
+
+            print(
+                f">> FlotillaRunner -> RemoteFlotillaRunner: "
+                f"get next partition for plan {plan_id}-{cnt}, num rows: {materialized_result.metadata().num_rows}"
+            )
+            cnt += 1
+
             yield materialized_result

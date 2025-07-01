@@ -549,15 +549,21 @@ class RayRunner(Runner[ray.ObjectRef]):
         query_id = str(uuid.uuid4())
         daft_execution_config = ctx.daft_execution_config
 
-        # Optimize the logical plan.
+        # Optimize the logical plan: LogicalPlan -> Optimized LogicalPlan
         builder = builder.optimize(daft_execution_config)
+        print(f"{query_id}: LogicalPlan -> Optimized LogicalPlan")
 
+        # 使用 DistributedPhysicalPlan 封装 Optimized LogicalPlan，
+        # !!!这里并不会触发转换成 PhysicalPlan
         distributed_plan = DistributedPhysicalPlan.from_logical_plan_builder(
             builder._builder, query_id, daft_execution_config
         )
+
+        # 创建 FlotillaRunner，期间会尽量在 Ray Head 节点上启动 RemoteFlotillaRunner Actor
         if self.flotilla_plan_runner is None:
             self.flotilla_plan_runner = FlotillaRunner()
 
+        # 执行物理执行计划
         yield from self.flotilla_plan_runner.stream_plan(
             distributed_plan, self._part_set_cache.get_all_partition_sets()
         )

@@ -137,7 +137,9 @@ impl<Op: BlockingSink + 'static> BlockingSinkNode<Op> {
         let compute_runtime = get_compute_runtime();
         let spawner =
             ExecutionTaskSpawner::new(compute_runtime, memory_manager, runtime_stats, span);
+        // 创建 Writer
         let mut state = op.make_state()?;
+        // 循环消费数据并执行 sink 方法
         while let Some(morsel) = input_receiver.recv().await {
             let result = op.sink(morsel, state, &spawner).await??;
             match result {
@@ -160,6 +162,7 @@ impl<Op: BlockingSink + 'static> BlockingSinkNode<Op> {
         runtime_stats: Arc<dyn RuntimeStats>,
         memory_manager: Arc<MemoryManager>,
     ) {
+        // 提交 num_worker 个 Task，每个 Task 绑定一个 input_receiver
         for input_receiver in input_receivers {
             task_set.spawn(Self::run_worker(
                 op.clone(),
@@ -270,6 +273,7 @@ impl<Op: BlockingSink + 'static> PipelineNode for BlockingSinkNode<Op> {
 
         let op = self.op.clone();
         let runtime_stats = self.runtime_stats.clone();
+        // 计算并发度，对于 WriteSink 而言如果没有指定 partition_by 则为 1
         let num_workers = op.max_concurrency();
 
         let dispatch_spawner = op.dispatch_spawner(Some(self.morsel_size_requirement));
@@ -290,6 +294,7 @@ impl<Op: BlockingSink + 'static> PipelineNode for BlockingSinkNode<Op> {
         runtime_handle.spawn(
             async move {
                 let mut task_set = TaskSet::new();
+                // 提交 num_worker 个 Task
                 Self::spawn_workers(
                     op.clone(),
                     spawned_dispatch_result.worker_receivers,

@@ -21,6 +21,7 @@ pub(crate) use scheduler_actor::{
 use tokio_util::sync::CancellationToken;
 
 pub(super) trait Scheduler<T: Task>: Send + Sync {
+    /// 更新当前 Scheduler 当前维护的 Worker 信息快照
     fn update_worker_state(&mut self, worker_snapshots: &[WorkerSnapshot]);
     fn enqueue_tasks(&mut self, tasks: Vec<PendingTask<T>>);
     fn schedule_tasks(&mut self) -> Vec<ScheduledTask<T>>;
@@ -157,6 +158,7 @@ pub(crate) struct WorkerSnapshot {
     worker_id: WorkerId,
     total_num_cpus: f64,
     total_num_gpus: f64,
+    // 记录调度给该 Worker 节点的任务详情
     active_task_details: HashMap<TaskContext, TaskDetails>,
 }
 
@@ -213,9 +215,11 @@ impl WorkerSnapshot {
 
     // TODO: Potentially include memory as well, and also be able to overschedule tasks.
     pub fn can_schedule_task(&self, task: &impl Task) -> bool {
+        // 如果 task 需要 GPU，但节点可用 GPU 资源为 0 则跳过
         if task.resource_request().num_gpus() > 0.0 && self.available_num_gpus() == 0.0 {
             return false;
         }
+        // 节点可用的 CPU 资源要大于 task 的资源需求
         self.available_num_cpus() >= task.resource_request().num_cpus()
     }
 }
