@@ -30,7 +30,6 @@ if TYPE_CHECKING:
     from daft.logical.map_partition_ops import MapPartitionOp
     from daft.logical.schema import Schema
 
-
 ID_GEN = itertools.count()
 
 
@@ -711,19 +710,28 @@ class LocalCount(SingleOutputInstruction):
 @dataclass(frozen=True)
 class LocalLimit(SingleOutputInstruction):
     limit: int
+    offset: int = 0
 
     def run(self, inputs: list[MicroPartition]) -> list[MicroPartition]:
         return self._limit(inputs)
 
     def _limit(self, inputs: list[MicroPartition]) -> list[MicroPartition]:
+        assert self.offset >= 0, f"offset must be greater or equal than 0, but got: {self.offset}"
+        assert (
+            self.limit >= self.offset
+        ), f"limit must be greater or equal than offset {self.offset}, but got: {self.limit}"
         [input] = inputs
-        return [input.head(self.limit)]
+        return [input.slice(self.offset, self.limit)]
 
     def run_partial_metadata(self, input_metadatas: list[PartialPartitionMetadata]) -> list[PartialPartitionMetadata]:
         [input_meta] = input_metadatas
         return [
             PartialPartitionMetadata(
-                num_rows=(min(self.limit, input_meta.num_rows) if input_meta.num_rows is not None else None),
+                num_rows=(
+                    max(min(input_meta.num_rows, self.limit) - self.offset, 0)
+                    if input_meta.num_rows is not None
+                    else None
+                ),
                 size_bytes=None,
                 boundaries=input_meta.boundaries,
             )
