@@ -3,20 +3,26 @@ from __future__ import annotations
 import pytest
 
 import daft
-from daft import DataType, col
-from tests.conftest import get_tests_daft_runner_name
+from daft import col
+
+# FIXME by zhenchao
+daft.set_execution_config(
+    use_experimental_distributed_engine=False,
+)
 
 
 @pytest.fixture(scope="session")
 def input_df():
-    df = daft.range(start=0, end=1024, partitions=100)
-    df = df.with_columns(
-        {
-            "name": df["id"].apply(func=lambda x: f"user_{x}", return_dtype=DataType.string()),
-            "email": df["id"].apply(func=lambda x: f"user_{x}@getdaft.io", return_dtype=DataType.string()),
-        }
-    )
-    return df
+    # df = daft.range(start=0, end=1024, partitions=100)
+    # df = df.with_columns(
+    #     {
+    #         "name": df["id"].apply(func=lambda x: f"user_{x}", return_dtype=DataType.string()),
+    #         "email": df["id"].apply(func=lambda x: f"user_{x}@getdaft.io", return_dtype=DataType.string()),
+    #     }
+    # )
+    # return df
+    # FIXME by zhenchao
+    return daft.read_parquet("/opt/workspace/daft/data/test")
 
 
 def test_negative_limit(input_df):
@@ -137,30 +143,26 @@ def test_limit_with_sort(input_df):
     assert df.to_pydict() == {"name": []}
 
 
-@pytest.mark.skipif(
-    condition=get_tests_daft_runner_name() != "native",
-    reason="Offset operator only implemented in the native runner now",
-)
 def test_negative_offset(input_df):
     with pytest.raises(ValueError) as excinfo:
         input_df.select("name").offset(-1).limit(1).collect()
     assert "OFFSET <n> must be greater than or equal to 0, instead got: -1" in str(excinfo.value)
 
 
-@pytest.mark.skipif(
-    condition=get_tests_daft_runner_name() != "native",
-    reason="Offset operator only implemented in the native runner now",
-)
 def test_offset_without_limit(input_df):
     with pytest.raises(Exception) as excinfo:
         input_df.select("name").offset(17).collect()
     assert "Not Yet Implemented: Offset without limit is unsupported now!" in str(excinfo.value)
 
 
-@pytest.mark.skipif(
-    condition=get_tests_daft_runner_name() != "native",
-    reason="Offset operator only implemented in the native runner now",
-)
+def test(input_df):
+    # df = input_df.select("name").limit(7).offset(0)
+    # assert df.count_rows() == 7
+
+    df = input_df.select("name").limit(0).offset(7)
+    assert df.count_rows() == 0
+
+
 def test_limit_before_offset(input_df):
     df = input_df.select("name").limit(7).offset(0)
     assert df.count_rows() == 7
@@ -207,10 +209,6 @@ def test_limit_before_offset(input_df):
     assert df.count_rows() == 3
 
 
-@pytest.mark.skipif(
-    condition=get_tests_daft_runner_name() != "native",
-    reason="Offset operator only implemented in the native runner now",
-)
 def test_limit_after_offset(input_df):
     df = input_df.select("name").offset(2).limit(0)
     assert df.count_rows() == 0
@@ -269,10 +267,6 @@ def test_limit_after_offset(input_df):
     assert df.count_rows() == 3
 
 
-@pytest.mark.skipif(
-    condition=get_tests_daft_runner_name() != "native",
-    reason="Offset operator only implemented in the native runner now",
-)
 def test_limit_before_offset_with_sort(input_df):
     df = input_df.select("id", "name").sort(by=col("id"), desc=False).limit(7).offset(0)
     assert df.to_pydict() == {"id": [i for i in range(0, 7)], "name": [f"user_{i}" for i in range(0, 7)]}
@@ -374,10 +368,6 @@ def test_limit_before_offset_with_sort(input_df):
     assert df.to_pydict() == {"name": [f"user_{i}" for i in range(2, -1, -1)]}
 
 
-@pytest.mark.skipif(
-    condition=get_tests_daft_runner_name() != "native",
-    reason="Offset operator only implemented in the native runner now",
-)
 def test_limit_after_offset_with_sort(input_df):
     df = input_df.select("id", "name").sort(by=col("id"), desc=False).offset(2).limit(0)
     assert df.count_rows() == 0
@@ -481,10 +471,6 @@ def test_limit_after_offset_with_sort(input_df):
     assert df.to_pydict() == {"name": []}
 
 
-@pytest.mark.skipif(
-    condition=get_tests_daft_runner_name() != "native",
-    reason="Offset operator only implemented in the native runner now",
-)
 def test_paging(input_df):
     offset = 0
     limit = 100
