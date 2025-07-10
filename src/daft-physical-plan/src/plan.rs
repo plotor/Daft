@@ -255,24 +255,40 @@ impl PhysicalPlan {
                     acc_selectivity: input_stats.acc_selectivity * estimated_selectivity,
                 }
             }
-            Self::Limit(Limit { input, limit, .. }) | Self::TopN(TopN { input, limit, .. }) => {
+            Self::Limit(Limit {
+                input,
+                offset,
+                limit,
+                ..
+            })
+            | Self::TopN(TopN {
+                input,
+                offset,
+                limit,
+                ..
+            }) => {
                 let input_stats = input.approximate_stats();
-                let limit = *limit as usize;
-                let limit_selectivity = if input_stats.num_rows > limit {
-                    if input_stats.num_rows == 0 {
-                        0.0
-                    } else {
-                        limit as f64 / input_stats.num_rows as f64
-                    }
-                } else {
-                    1.0
+                let approx_num_rows = input_stats.num_rows;
+
+                let (offset, limit) = (*offset, *limit);
+                let limit_num_rows = match (offset, limit) {
+                    (Some(o), Some(l)) => (l - o) as usize,
+                    (Some(o), None) => approx_num_rows.saturating_sub(o as usize),
+                    (None, Some(l)) => l as usize,
+                    (None, None) => unreachable!(),
                 };
+
+                let limit_selectivity = if approx_num_rows == 0 {
+                    0.0
+                } else {
+                    (limit_num_rows as f64 / approx_num_rows as f64).clamp(0.0, 1.0)
+                };
+
                 ApproxStats {
-                    num_rows: limit.min(input_stats.num_rows),
-                    size_bytes: if input_stats.num_rows > limit {
-                        let est_bytes_per_row =
-                            input_stats.size_bytes / input_stats.num_rows.max(1);
-                        limit * est_bytes_per_row
+                    num_rows: limit_num_rows.min(approx_num_rows),
+                    size_bytes: if approx_num_rows > limit_num_rows {
+                        let est_bytes_per_row = input_stats.size_bytes / approx_num_rows.max(1);
+                        limit_num_rows * est_bytes_per_row
                     } else {
                         input_stats.size_bytes
                     },
@@ -461,8 +477,8 @@ impl PhysicalPlan {
 
                 Self::ActorPoolProject(ActorPoolProject {projection, ..}) => Self::ActorPoolProject(ActorPoolProject::try_new(input.clone(), projection.clone()).unwrap()),
                 Self::Filter(Filter { predicate, estimated_selectivity,.. }) => Self::Filter(Filter::new(input.clone(), predicate.clone(), *estimated_selectivity)),
-                Self::Limit(Limit { limit, eager, num_partitions, .. }) => Self::Limit(Limit::new(input.clone(), *limit, *eager, *num_partitions)),
-                Self::TopN(TopN { sort_by, descending, nulls_first, limit, num_partitions, .. }) => Self::TopN(TopN::new(input.clone(), sort_by.clone(), descending.clone(), nulls_first.clone(), *limit, *num_partitions)),
+                Self::Limit(Limit { offset, limit, eager, num_partitions, .. }) => Self::Limit(Limit::try_new(input.clone(), *offset, *limit, *eager, *num_partitions).unwrap()),
+                Self::TopN(TopN { sort_by, descending, nulls_first, offset, limit, num_partitions, .. }) => Self::TopN(TopN::try_new(input.clone(), sort_by.clone(), descending.clone(), nulls_first.clone(), *offset,*limit, *num_partitions).unwrap()),
                 Self::Explode(Explode { to_explode, .. }) => Self::Explode(Explode::try_new(input.clone(), to_explode.clone()).unwrap()),
                 Self::Unpivot(Unpivot { ids, values, variable_name, value_name, .. }) => Self::Unpivot(Unpivot::new(input.clone(), ids.clone(), values.clone(), variable_name, value_name)),
                 Self::Pivot(Pivot { group_by, pivot_column, value_column, names, .. }) => Self::Pivot(Pivot::new(input.clone(), group_by.clone(), pivot_column.clone(), value_column.clone(), names.clone())),

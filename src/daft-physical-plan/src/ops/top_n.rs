@@ -1,3 +1,4 @@
+use common_error::{ensure, DaftResult};
 use daft_dsl::ExprRef;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -11,27 +12,34 @@ pub struct TopN {
     pub sort_by: Vec<ExprRef>,
     pub descending: Vec<bool>,
     pub nulls_first: Vec<bool>,
-    pub limit: u64,
+    pub offset: Option<u64>,
+    pub limit: Option<u64>,
     pub num_partitions: usize,
 }
 
 impl TopN {
-    pub(crate) fn new(
+    pub(crate) fn try_new(
         input: PhysicalPlanRef,
         sort_by: Vec<ExprRef>,
         descending: Vec<bool>,
         nulls_first: Vec<bool>,
-        limit: u64,
+        offset: Option<u64>,
+        limit: Option<u64>,
         num_partitions: usize,
-    ) -> Self {
-        Self {
+    ) -> DaftResult<Self> {
+        ensure!(
+            offset.is_some() || limit.is_some(),
+            "TopN node must have offset or limit"
+        );
+        Ok(Self {
             input,
             sort_by,
             descending,
             nulls_first,
+            offset,
             limit,
             num_partitions,
-        }
+        })
     }
 
     pub fn multiline_display(&self) -> Vec<String> {
@@ -52,10 +60,21 @@ impl TopN {
                 )
             })
             .join(", ");
-        res.push(format!(
-            "TopN: Sort by = {}, Num Rows = {}",
-            pairs, self.limit
-        ));
+
+        res.push(match (self.offset, self.limit) {
+            (Some(o), Some(l)) => {
+                format!(
+                    "TopN: Sort by = {}, Num Rows = {}, Offset = {}",
+                    pairs,
+                    l.saturating_sub(o),
+                    o
+                )
+            }
+            (Some(o), None) => format!("TopN: Sort by = {}, Num Rows = N/A, Offset = {}", pairs, o),
+            (None, Some(l)) => format!("TopN: Sort by = {}, Num Rows = {}", pairs, l),
+            (None, None) => unreachable!(),
+        });
+
         res.push(format!("Num partitions = {}", self.num_partitions));
         res
     }

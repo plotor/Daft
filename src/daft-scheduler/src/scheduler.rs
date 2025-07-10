@@ -406,6 +406,7 @@ fn physical_plan_to_partition_tasks(
         }
         PhysicalPlan::Limit(Limit {
             input,
+            offset,
             limit,
             eager,
             num_partitions,
@@ -413,9 +414,14 @@ fn physical_plan_to_partition_tasks(
             let upstream_iter =
                 physical_plan_to_partition_tasks(input, py, psets, actor_pool_manager)?;
             let py_physical_plan = py.import(pyo3::intern!(py, "daft.execution.physical_plan"))?;
+
+            // Consider that some rust methods called by python (such as slice) use i64 as the
+            // parameter type, so the MAX value of i64 is used as the upper limit to avoid the
+            // OverflowError: Python int too large to convert to C long
+            let (offset, limit) = (offset.unwrap_or(0), limit.unwrap_or(i64::MAX as u64));
             let global_limit_iter = py_physical_plan
                 .getattr(pyo3::intern!(py, "global_limit"))?
-                .call1((upstream_iter, *limit, *eager, *num_partitions))?;
+                .call1((upstream_iter, offset, limit, *eager, *num_partitions))?;
             Ok(global_limit_iter.into())
         }
         PhysicalPlan::Explode(Explode {
@@ -517,6 +523,7 @@ fn physical_plan_to_partition_tasks(
             sort_by,
             descending,
             nulls_first,
+            offset,
             limit,
             num_partitions,
         }) => {
@@ -529,6 +536,8 @@ fn physical_plan_to_partition_tasks(
                 .iter()
                 .map(|expr| PyExpr::from(expr.clone()))
                 .collect();
+
+            let (offset, limit) = (offset.unwrap_or(0), limit.unwrap_or(i64::MAX as u64));
             let global_limit_iter = py_physical_plan
                 .getattr(pyo3::intern!(py, "top_n"))?
                 .call1((
@@ -536,7 +545,8 @@ fn physical_plan_to_partition_tasks(
                     sort_by_pyexprs,
                     descending.clone(),
                     nulls_first.clone(),
-                    *limit,
+                    offset,
+                    limit,
                     *num_partitions,
                 ))?;
             Ok(global_limit_iter.into())
