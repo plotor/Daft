@@ -39,7 +39,6 @@ if TYPE_CHECKING:
 
     import daft
 
-
 logger = logging.getLogger(__name__)
 
 try:
@@ -1235,15 +1234,26 @@ class RayRunner(Runner[ray.ObjectRef]):
                 )
         else:
             if address is not None:
-                if not address.endswith("10001"):
-                    warnings.warn(
-                        f"The address to a Ray client server is typically at port :10001, but instead we found: {address}"
-                    )
-                if not address.startswith("ray://"):
-                    warnings.warn(
-                        f"Expected Ray address to start with 'ray://' protocol but found: {address}. Automatically prefixing your address with the protocol to make a Ray connection: ray://{address}"
-                    )
-                    address = "ray://" + address
+                if address.strip() == "":
+                    warnings.warn(f"The Ray address is '{address}', and replace it with 'auto'")
+                    address = "auto"
+                else:
+                    if not address.endswith("10001"):
+                        warnings.warn(
+                            f"The address to a Ray client server is typically at port :10001, but instead we found: {address}"
+                        )
+
+                    if not address.startswith("ray://"):
+                        warnings.warn(
+                            f"Expected Ray address to start with 'ray://' protocol but found: {address}. "
+                            f"Automatically prefixing your address with the protocol to make a Ray connection: ray://{address}"
+                        )
+                        address = "ray://" + address
+
+                    if address.startswith("ray://127.0.0.1:") or address.startswith("ray://localhost:"):
+                        warnings.warn(f"The Ray address is '{address}', and replace it with 'auto'")
+                        address = "auto"
+
             ray.init(address=address)
 
         # Check if Ray is running in "client mode" (connected to a Ray cluster via a Ray client)
