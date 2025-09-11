@@ -23,7 +23,6 @@ from daft.udf._internal import check_fn_serializable
 if TYPE_CHECKING:
     from collections.abc import Generator
 
-
 InitArgsType: TypeAlias = Optional[tuple[tuple[Any, ...], dict[str, Any]]]
 UdfReturnType: TypeAlias = Union[Series, list[Any], "np.ndarray[Any, Any]", "pa.Array", "pa.ChunkedArray"]
 UserDefinedPyFunc: TypeAlias = Callable[..., UdfReturnType]
@@ -298,6 +297,8 @@ class UDF:
         num_gpus: float | None = _UnsetMarker,
         memory_bytes: int | None = _UnsetMarker,
         batch_size: int | None = _UnsetMarker,
+        concurrency: int | None = _UnsetMarker,
+        use_process: bool | None = _UnsetMarker,
     ) -> UDF:
         """Replace the resource requests for running each instance of your UDF.
 
@@ -309,6 +310,8 @@ class UDF:
             memory_bytes: Amount of memory to allocate each running instance of your UDF in bytes. If your UDF is experiencing out-of-memory errors,
                 this parameter can help hint Daft that each UDF requires a certain amount of heap memory for execution.
             batch_size: Enables batching of the input into batches of at most this size. Results between batches are concatenated.
+            concurrency: Spin up `N` number of persistent replicas of the UDF to process all partitions.
+            use_process: Run the UDF on a separate process.
 
         Examples:
             For instance, if your UDF requires 4 CPUs to run, you can configure it like so:
@@ -333,8 +336,16 @@ class UDF:
             new_resource_request = new_resource_request.with_memory_bytes(memory_bytes)
 
         new_batch_size = self.batch_size if batch_size is _UnsetMarker else batch_size
+        new_concurrency = self.concurrency if concurrency is _UnsetMarker else concurrency
+        new_use_process = self.use_process if use_process is _UnsetMarker else use_process
 
-        return dataclasses.replace(self, resource_request=new_resource_request, batch_size=new_batch_size)
+        return dataclasses.replace(
+            self,
+            concurrency=new_concurrency,
+            resource_request=new_resource_request,
+            batch_size=new_batch_size,
+            use_process=new_use_process,
+        )
 
     def _validate_init_args(self) -> None:
         if isinstance(self.inner, type):
