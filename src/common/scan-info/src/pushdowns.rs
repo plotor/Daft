@@ -9,7 +9,7 @@ use crate::Sharder;
 
 pub trait SupportsPushdownFilters {
     /// Applies filters to the scan operator and returns the pushable filters and the remaining filters.
-    fn push_filters(&self, filter: &[ExprRef]) -> (Vec<ExprRef>, Vec<ExprRef>);
+    fn push_filters(&self, filters: &[ExprRef]) -> (Vec<ExprRef>, Vec<ExprRef>);
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
