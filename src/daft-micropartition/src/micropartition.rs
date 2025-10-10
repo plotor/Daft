@@ -293,6 +293,13 @@ fn materialize_scan_task(
             )
             .context(DaftCoreComputeSnafu)?
         }
+        // ****************
+        // Native Lance Reads
+        // ****************
+        FileFormatConfig::Lance(_cfg) => {
+            // TODO add impl by zhenchao
+            panic!("Native Lance Reads not yet implemented")
+        }
         #[cfg(feature = "python")]
         FileFormatConfig::Database(DatabaseSourceConfig { sql, conn }) => {
             let predicate = scan_task

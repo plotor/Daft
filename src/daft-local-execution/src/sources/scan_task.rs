@@ -19,7 +19,7 @@ use daft_io::IOStatsRef;
 use daft_json::{JsonConvertOptions, JsonParseOptions, JsonReadOptions};
 use daft_micropartition::MicroPartition;
 use daft_parquet::read::{ParquetSchemaInferenceOptions, read_parquet_bulk_async};
-use daft_scan::{ChunkSpec, ScanTask};
+use daft_scan::{ChunkSpec, DataSource, ScanTask};
 use daft_warc::WarcConvertOptions;
 use futures::{FutureExt, Stream, StreamExt};
 use snafu::ResultExt;
@@ -605,6 +605,25 @@ async fn stream_scan_task(
                 predicate: scan_task.pushdowns.filters.clone(),
             };
             daft_warc::stream_warc(url, io_client, Some(io_stats), convert_options, None).await?
+        }
+        FileFormatConfig::Lance(_) => {
+            if let DataSource::Fragment {
+                fragment_ids,
+                columns,
+                filter,
+                ..
+            } = source
+            {
+                daft_lance::read::stream_lance_fragments(
+                    url,
+                    fragment_ids,
+                    columns.clone(),
+                    filter.clone(),
+                )
+                .await?
+            } else {
+                panic!("Lance file format only support fragment data source.")
+            }
         }
         #[cfg(feature = "python")]
         FileFormatConfig::Database(common_file_formats::DatabaseSourceConfig { sql, conn }) => {
