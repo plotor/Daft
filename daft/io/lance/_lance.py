@@ -4,8 +4,9 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 from daft import context
 from daft.api_annotations import PublicAPI
-from daft.daft import IOConfig, ScanOperatorHandle
+from daft.daft import FileFormatConfig, IOConfig, LanceSourceConfig, ScanOperatorHandle, StorageConfig
 from daft.dataframe import DataFrame
+from daft.io.common import get_tabular_files_scan
 from daft.io.lance.lance_merge_column import merge_columns_internal
 from daft.io.lance.lance_scan import LanceDBScanOperator
 from daft.io.object_store_options import io_config_to_storage_options
@@ -32,6 +33,7 @@ def read_lance(
     default_scan_options: Optional[dict[str, str]] = None,
     metadata_cache_size_bytes: Optional[int] = None,
     fragment_group_size: Optional[int] = None,
+    use_native_reader: bool = False,
 ) -> DataFrame:
     """Create a DataFrame from a LanceDB table.
 
@@ -103,6 +105,23 @@ def read_lance(
         >>> df = daft.read_lance("s3://my-lancedb-bucket/data/", fragment_group_size=5)
         >>> df.show()
     """
+    io_config = context.get_context().daft_planning_config.default_io_config if io_config is None else io_config
+
+    if use_native_reader:
+        file_format_config = FileFormatConfig.from_lance_config(LanceSourceConfig())
+        storage_config = StorageConfig(True, io_config)  # FIXME True? by zhenchao
+        # FIXME parameter? by zhenchao
+        builder = get_tabular_files_scan(
+            path=url,
+            infer_schema=True,
+            schema=None,
+            file_format_config=file_format_config,
+            storage_config=storage_config,
+            file_path_column=None,
+            hive_partitioning=False,
+        )
+        return DataFrame(builder)
+
     try:
         import lance
     except ImportError as e:
@@ -110,7 +129,6 @@ def read_lance(
             "Unable to import the `lance` package, please ensure that Daft is installed with the lance extra dependency: `pip install daft[lance]`"
         ) from e
 
-    io_config = context.get_context().daft_planning_config.default_io_config if io_config is None else io_config
     storage_options = io_config_to_storage_options(io_config, url)
 
     ds = lance.dataset(

@@ -316,6 +316,11 @@ class WarcSourceConfig:
 
     def __init__(self) -> None: ...
 
+class LanceSourceConfig:
+    """Configuration of a Lance data source."""
+
+    def __init__(self) -> None: ...
+
 class DatabaseSourceConfig:
     """Configuration of a database data source."""
 
@@ -327,7 +332,14 @@ class DatabaseSourceConfig:
 class FileFormatConfig:
     """Configuration for parsing a particular file format (Parquet, CSV, JSON)."""
 
-    config: ParquetSourceConfig | CsvSourceConfig | JsonSourceConfig | DatabaseSourceConfig | WarcSourceConfig
+    config: (
+        ParquetSourceConfig
+        | CsvSourceConfig
+        | JsonSourceConfig
+        | DatabaseSourceConfig
+        | WarcSourceConfig
+        | LanceSourceConfig
+    )
 
     @staticmethod
     def from_parquet_config(config: ParquetSourceConfig) -> FileFormatConfig:
@@ -352,6 +364,11 @@ class FileFormatConfig:
     @staticmethod
     def from_database_config(config: DatabaseSourceConfig) -> FileFormatConfig:
         """Create a database file format config."""
+        ...
+
+    @staticmethod
+    def from_lance_config(config: LanceSourceConfig) -> FileFormatConfig:
+        """Create a Lance file format config."""
         ...
 
     def file_format(self) -> FileFormat:
@@ -1946,6 +1963,7 @@ class NativeExecutor:
         results_buffer_size: int | None,
         context: dict[str, str] | None = None,
     ) -> Iterator[PyMicroPartition]: ...
+
     # Primarily used for Flotilla, so subscribers are unused
     def run_async(
         self,
