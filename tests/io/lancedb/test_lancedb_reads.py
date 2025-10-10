@@ -22,7 +22,9 @@ def lance_dataset_path(tmp_path_factory):
 
 
 def test_lancedb_read(lance_dataset_path):
-    df = daft.read_lance(lance_dataset_path)
+    # FIXME by zhenchao
+    print(f">> {lance_dataset_path}")
+    df = daft.read_lance(url=lance_dataset_path, use_native_reader=True)
     assert df.to_pydict() == data
 
 

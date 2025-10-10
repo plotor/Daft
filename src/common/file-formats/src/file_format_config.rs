@@ -19,6 +19,7 @@ pub enum FileFormatConfig {
     Csv(CsvSourceConfig),
     Json(JsonSourceConfig),
     Warc(WarcSourceConfig),
+    Lance(LanceSourceConfig),
     #[cfg(feature = "python")]
     Database(DatabaseSourceConfig),
     #[cfg(feature = "python")]
@@ -42,6 +43,7 @@ impl FileFormatConfig {
             Self::Csv(_) => "Csv".to_string(),
             Self::Json(_) => "Json".to_string(),
             Self::Warc(_) => "Warc".to_string(),
+            Self::Lance(_) => "Lance".to_string(),
             #[cfg(feature = "python")]
             Self::Database(_) => "Database".to_string(),
             #[cfg(feature = "python")]
@@ -69,6 +71,7 @@ impl FileFormatConfig {
             Self::Csv(source) => source.multiline_display(),
             Self::Json(source) => source.multiline_display(),
             Self::Warc(source) => source.multiline_display(),
+            Self::Lance(source) => source.multiline_display(),
             #[cfg(feature = "python")]
             Self::Database(source) => source.multiline_display(),
             #[cfg(feature = "python")]
@@ -419,3 +422,29 @@ impl WarcSourceConfig {
 }
 
 impl_bincode_py_state_serialization!(WarcSourceConfig);
+
+/// Configuration for a Lance data source.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Hash)]
+#[cfg_attr(feature = "python", pyclass(module = "daft.daft", get_all))]
+pub struct LanceSourceConfig {}
+
+impl LanceSourceConfig {
+    #[must_use]
+    pub fn multiline_display(&self) -> Vec<String> {
+        let res = vec![];
+        res
+    }
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl LanceSourceConfig {
+    /// Create a config for a Lance data source.
+    #[new]
+    #[pyo3(signature = ())]
+    fn new() -> PyResult<Self> {
+        Ok(Self {})
+    }
+}
+
+impl_bincode_py_state_serialization!(LanceSourceConfig);

@@ -25,9 +25,11 @@ use common_daft_config::DaftExecutionConfig;
 pub mod builder;
 pub mod scan_task_iters;
 
+mod fragment;
 #[cfg(feature = "python")]
 pub mod python;
 pub mod storage_config;
+
 #[cfg(feature = "python")]
 use pyo3::PyErr;
 #[cfg(feature = "python")]
@@ -737,6 +739,10 @@ impl ScanTask {
                             } else {
                                 1.0
                             }
+                        }
+                        FileFormatConfig::Lance(_) => {
+                            // TODO add impl, by zhenchao 2025-10-15 11:14:12
+                            1.0
                         }
                         #[cfg(feature = "python")]
                         FileFormatConfig::Database(_) => 1.0,
