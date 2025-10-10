@@ -534,6 +534,10 @@ pub(super) fn translate_single_logical_node(
                         FileFormat::Warc => Err(common_error::DaftError::ValueError(
                             "Warc sink not yet implemented".to_string(),
                         )),
+                        FileFormat::Lance => Err(common_error::DaftError::ValueError(
+                            // TODO add impl, by zhenchao 2025-10-15 11:14:12
+                            "Native lance sink not yet implemented".to_string(),
+                        )),
                     }
                 }
                 #[cfg(feature = "python")]
