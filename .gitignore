@@ -70,3 +70,5 @@ site
 # AGENT Prompting Templates
 AGENTS.md
 CLAUDE.local.md
+
+tests/**/test_debug.py
